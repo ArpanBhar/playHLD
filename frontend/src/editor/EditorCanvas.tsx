@@ -93,7 +93,7 @@ function Canvas({ architecture, selectedId, onSelect, onMove, onMoveStart, onMov
       maxZoom={1.6}
       deleteKeyCode={['Backspace', 'Delete']}
     >
-      <Background color="#393939" gap={20} size={1} />
+      <Background color="#243342" gap={22} size={1.4} />
       <Controls showInteractive={false} />
     </ReactFlow>
     {selectedEdge && <div className="selected-edge-tools" role="group" aria-label="Selected connection">

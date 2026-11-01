@@ -7,6 +7,7 @@ import './styles.css'
 import './styles-auth.css'
 import './theme-dark.css'
 import './landing/landing.css'
+import './theme-refresh.css'
 
 document.documentElement.classList.toggle('no-view-transitions', typeof document.startViewTransition !== 'function')
 
