@@ -1,0 +1,236 @@
+openapi: 3.1.0
+info:
+  title: SystemForge API
+  version: 0.5.0
+  description: Implemented route skeleton. Request and response schemas still need completion before release.
+servers:
+  - url: /api
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: sf_session
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            requestId: { type: string }
+paths:
+  /healthz:
+    servers: [{ url: / }]
+    get:
+      summary: Process liveness
+      responses:
+        '200': { description: Process is running }
+  /readyz:
+    servers: [{ url: / }]
+    get:
+      summary: Database readiness when configured
+      responses:
+        '200': { description: Database is ready }
+        '503': { description: Database unavailable }
+  /catalog:
+    get:
+      summary: Component catalog and engine version
+      responses:
+        '200': { description: Catalog }
+  /auth/register:
+    post:
+      summary: Register an account and establish a session
+      responses:
+        '201': { description: Account created }
+        '409': { description: Email already registered }
+  /auth/login:
+    post:
+      summary: Start a cookie session
+      responses:
+        '200': { description: Signed in }
+        '401': { description: Invalid credentials }
+  /auth/me:
+    get:
+      summary: Current account
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Account }
+        '401': { description: Not signed in }
+  /auth/logout:
+    post:
+      summary: Revoke current session
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Signed out }
+  /designs:
+    get:
+      summary: List personal designs
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Design summaries }
+    post:
+      summary: Create personal design
+      security: [{ sessionCookie: [] }]
+      responses:
+        '201': { description: Design created }
+  /designs/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: Read owned design
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Design }
+        '404': { description: Not found or not owned }
+    put:
+      summary: Update owned design with expectedVersion
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Updated design }
+        '409': { description: Version conflict }
+    delete:
+      summary: Delete owned design
+      security: [{ sessionCookie: [] }]
+      responses:
+        '204': { description: Deleted }
+  /practice/challenges:
+    get:
+      summary: List public versioned challenges
+      responses:
+        '200': { description: Challenge definitions }
+  /practice/challenges/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      summary: Read challenge
+      responses:
+        '200': { description: Challenge }
+        '404': { description: Not found }
+  /practice/challenges/{id}/attempts:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      summary: Run and persist server-verified challenge attempt
+      security: [{ sessionCookie: [] }]
+      responses:
+        '201': { description: Verified attempt }
+        '422': { description: Invalid graph or forbidden component }
+  /practice/progress/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      summary: Current user's attempt count and latest goals
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Progress }
+  /practice/attempts:
+    get:
+      summary: Current user's recent attempts
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Attempt summaries }
+  /workspaces:
+    get:
+      summary: List authorized workspaces
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Workspaces }
+    post:
+      summary: Create private workspace
+      security: [{ sessionCookie: [] }]
+      responses:
+        '201': { description: Workspace created }
+  /projects:
+    get:
+      summary: List authorized projects
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Projects }
+    post:
+      summary: Create project and main branch
+      security: [{ sessionCookie: [] }]
+      responses:
+        '201': { description: Project created }
+  /projects/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: Read authorized project and current main draft
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Project }
+        '404': { description: Not authorized or not found }
+  /projects/{id}/draft:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      summary: Replace main draft with expectedRevision
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: New revision }
+        '409': { description: Revision conflict }
+  /projects/{id}/versions:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: List immutable versions
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Versions }
+    post:
+      summary: Save current branch revision as an immutable version
+      security: [{ sessionCookie: [] }]
+      responses:
+        '201': { description: Version created }
+        '409': { description: Revision conflict or existing version }
+  /projects/{id}/versions/{versionId}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: versionId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: Read immutable graph version
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Version and graph }
+  /projects/{id}/runs:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: List native project runs with workload and summary
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Run summaries }
+    post:
+      summary: Run immutable version and exact workload with native engine
+      security: [{ sessionCookie: [] }]
+      responses:
+        '201': { description: Native run saved }
+        '200': { description: Identical saved run returned }
+        '422': { description: Invalid workload or graph }
+  /projects/{id}/runs/{runId}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: Read authorized run and snapshots
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Run }
+  /simulations:
+    post:
+      summary: Opt-in stateless native simulation for development and parity checks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '../schemas/v3/simulation.schema.json' }
+      responses:
+        '200': { description: Simulation result }
+        '400': { description: Malformed JSON }
+        '413': { description: Payload too large }
+        '422': { description: Invalid configuration }

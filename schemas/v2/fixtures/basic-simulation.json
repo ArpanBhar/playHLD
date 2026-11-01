@@ -1,0 +1,18 @@
+{
+  "architecture": {
+    "schemaVersion": 2,
+    "nodes": [
+      { "id": "client", "kind": "source", "label": "Clients", "position": { "x": 100, "y": 200 }, "config": { "queueLimit": 0 } },
+      { "id": "balancer", "kind": "load_balancer", "label": "Load balancer", "position": { "x": 320, "y": 200 }, "config": { "concurrency": 20, "meanServiceTimeUs": 100, "queueLimit": 200, "routingPolicy": "round_robin" } },
+      { "id": "api-a", "kind": "api", "label": "API A", "position": { "x": 560, "y": 100 }, "config": { "concurrency": 10, "meanServiceTimeUs": 20000, "queueLimit": 200 } },
+      { "id": "api-b", "kind": "api", "label": "API B", "position": { "x": 560, "y": 300 }, "config": { "concurrency": 10, "meanServiceTimeUs": 20000, "queueLimit": 200 } }
+    ],
+    "edges": [
+      { "id": "client-balancer", "source": "client", "target": "balancer", "route": "always", "delayUs": 0 },
+      { "id": "balancer-api-a", "source": "balancer", "target": "api-a", "route": "always", "delayUs": 0 },
+      { "id": "balancer-api-b", "source": "balancer", "target": "api-b", "route": "always", "delayUs": 0 }
+    ]
+  },
+  "workload": { "schemaVersion": 1, "seed": "42", "entryNodeId": "client", "durationUs": 30000000, "drainTimeoutUs": 5000000, "arrivalRateRps": 500 },
+  "snapshotIntervalUs": 1000000
+}

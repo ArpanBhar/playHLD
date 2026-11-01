@@ -1,0 +1,12 @@
+{
+  "architecture": {
+    "schemaVersion": 1,
+    "nodes": [
+      { "id": "client", "kind": "source", "label": "Client", "position": { "x": 100, "y": 200 }, "config": { "queueLimit": 0 } },
+      { "id": "api", "kind": "api", "label": "API service", "position": { "x": 410, "y": 200 }, "config": { "replicas": 2, "concurrencyPerReplica": 10, "meanServiceTimeUs": 20000, "queueLimit": 200 } }
+    ],
+    "edges": [{ "id": "client-api", "source": "client", "target": "api", "route": "always", "delayUs": 0 }]
+  },
+  "workload": { "schemaVersion": 1, "seed": "42", "entryNodeId": "client", "durationUs": 30000000, "drainTimeoutUs": 5000000, "arrivalRateRps": 500 },
+  "snapshotIntervalUs": 1000000
+}

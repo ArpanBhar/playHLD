@@ -1,0 +1,228 @@
+{
+  "id": "service-capacity",
+  "version": 3,
+  "title": "The launch traffic spike",
+  "difficulty": "Beginner",
+  "scenario": "Your API must serve 800 requests per second during a product launch. Build a route from clients to the server and use the limited component and processing-slot budget to keep both tail latencies low. Any valid architecture can pass.",
+  "starter": {
+    "schemaVersion": 3,
+    "nodes": [
+      {
+        "id": "source",
+        "kind": "source",
+        "label": "Clients",
+        "position": {
+          "x": 80,
+          "y": 170
+        },
+        "config": {
+          "queueLimit": 0
+        }
+      },
+      {
+        "id": "api",
+        "kind": "api",
+        "label": "API server",
+        "position": {
+          "x": 480,
+          "y": 170
+        },
+        "config": {
+          "meanServiceTimeUs": 3000,
+          "queueLimit": 100,
+          "processingSlots": 1,
+          "maxInFlight": 101
+        }
+      }
+    ],
+    "edges": []
+  },
+  "workload": {
+    "schemaVersion": 1,
+    "seed": "42",
+    "entryNodeId": "source",
+    "durationUs": 10000000,
+    "drainTimeoutUs": 1000000,
+    "arrivalRateRps": 800,
+    "readFraction": 1
+  },
+  "goals": [
+    {
+      "id": "success",
+      "label": "Complete at least 99% of requests",
+      "metric": "success_fraction",
+      "operator": "gte",
+      "target": 99
+    },
+    {
+      "id": "p95",
+      "label": "P95 latency at or below 50 ms",
+      "metric": "p95_latency_us",
+      "operator": "lte",
+      "target": 50
+    },
+    {
+      "id": "p99",
+      "label": "P99 latency at or below 80 ms",
+      "metric": "p99_latency_us",
+      "operator": "lte",
+      "target": 80
+    }
+  ],
+  "hints": [
+    "Connect the client to the API server, either directly or through other components.",
+    "Draw each API instance separately. A load balancer can split traffic between them, while each instance consumes processing slots."
+  ],
+  "allowedKinds": [
+    "source",
+    "api",
+    "load_balancer",
+    "cache",
+    "database",
+    "message_queue",
+    "worker",
+    "object_storage",
+    "cdn"
+  ],
+  "resourceBudget": {
+    "maxNodes": 6,
+    "maxSlots": 9,
+    "maxByKind": {
+      "source": 1,
+      "api": 3,
+      "load_balancer": 1,
+      "cache": 1,
+      "database": 1,
+      "message_queue": 1,
+      "worker": 2,
+      "object_storage": 1,
+      "cdn": 1
+    },
+    "maxProcessingSlotsPerNode": 4
+  },
+  "componentSpecs": {
+    "api": {
+      "meanServiceTimeUs": 3000,
+      "queueLimit": 100
+    },
+    "load_balancer": {
+      "meanServiceTimeUs": 100,
+      "queueLimit": 100
+    },
+    "cache": {
+      "meanServiceTimeUs": 250,
+      "queueLimit": 100,
+      "hitRate": 0.8
+    },
+    "database": {
+      "meanServiceTimeUs": 6000,
+      "queueLimit": 100
+    },
+    "message_queue": {
+      "meanServiceTimeUs": 2000,
+      "queueLimit": 100
+    },
+    "worker": {
+      "meanServiceTimeUs": 1200,
+      "queueLimit": 100
+    },
+    "object_storage": {
+      "meanServiceTimeUs": 1500,
+      "queueLimit": 100
+    },
+    "cdn": {
+      "meanServiceTimeUs": 150,
+      "queueLimit": 100,
+      "hitRate": 0.8
+    }
+  },
+  "solution": {
+    "explanation": "A load balancer sends requests to two separate API instances. Each instance has its own processing slots and queue, so the diagram shows every unit of serving capacity.",
+    "architecture": {
+      "schemaVersion": 3,
+      "nodes": [
+        {
+          "id": "source",
+          "kind": "source",
+          "label": "Clients",
+          "position": {
+            "x": 80,
+            "y": 170
+          },
+          "config": {
+            "queueLimit": 0
+          }
+        },
+        {
+          "id": "balancer",
+          "kind": "load_balancer",
+          "label": "Load balancer",
+          "position": {
+            "x": 300,
+            "y": 210
+          },
+          "config": {
+            "meanServiceTimeUs": 100,
+            "queueLimit": 100,
+            "routingPolicy": "round_robin",
+            "processingSlots": 1,
+            "maxInFlight": 101
+          }
+        },
+        {
+          "id": "api",
+          "kind": "api",
+          "label": "API A",
+          "position": {
+            "x": 560,
+            "y": 100
+          },
+          "config": {
+            "meanServiceTimeUs": 3000,
+            "queueLimit": 100,
+            "processingSlots": 2,
+            "maxInFlight": 102
+          }
+        },
+        {
+          "id": "api-b",
+          "kind": "api",
+          "label": "API B",
+          "position": {
+            "x": 560,
+            "y": 320
+          },
+          "config": {
+            "meanServiceTimeUs": 3000,
+            "queueLimit": 100,
+            "processingSlots": 2,
+            "maxInFlight": 102
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "solution-1",
+          "source": "source",
+          "target": "balancer",
+          "route": "always",
+          "delayUs": 0
+        },
+        {
+          "id": "solution-2",
+          "source": "balancer",
+          "target": "api",
+          "route": "always",
+          "delayUs": 0
+        },
+        {
+          "id": "solution-3",
+          "source": "balancer",
+          "target": "api-b",
+          "route": "always",
+          "delayUs": 0
+        }
+      ]
+    }
+  }
+}

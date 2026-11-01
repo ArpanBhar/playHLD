@@ -1,0 +1,206 @@
+{
+  "id": "url-shortener-cache",
+  "version": 3,
+  "title": "Read-heavy redirects",
+  "difficulty": "Intermediate",
+  "scenario": "A redirect service receives 1,000 read requests per second. Design the path from clients to API servers and optional supporting components. Meet the latency and completion targets within the resource budget; a cache is an option, not a requirement.",
+  "starter": {
+    "schemaVersion": 3,
+    "nodes": [
+      {
+        "id": "source",
+        "kind": "source",
+        "label": "Clients",
+        "position": {
+          "x": 80,
+          "y": 170
+        },
+        "config": {
+          "queueLimit": 0
+        }
+      },
+      {
+        "id": "api",
+        "kind": "api",
+        "label": "API server",
+        "position": {
+          "x": 480,
+          "y": 170
+        },
+        "config": {
+          "meanServiceTimeUs": 2500,
+          "queueLimit": 120,
+          "processingSlots": 1,
+          "maxInFlight": 121
+        }
+      }
+    ],
+    "edges": []
+  },
+  "workload": {
+    "schemaVersion": 1,
+    "seed": "43",
+    "entryNodeId": "source",
+    "durationUs": 10000000,
+    "drainTimeoutUs": 1000000,
+    "arrivalRateRps": 1000,
+    "readFraction": 1
+  },
+  "goals": [
+    {
+      "id": "success",
+      "label": "Complete at least 99% of requests",
+      "metric": "success_fraction",
+      "operator": "gte",
+      "target": 99
+    },
+    {
+      "id": "p95",
+      "label": "P95 latency at or below 45 ms",
+      "metric": "p95_latency_us",
+      "operator": "lte",
+      "target": 45
+    },
+    {
+      "id": "p99",
+      "label": "P99 latency at or below 75 ms",
+      "metric": "p99_latency_us",
+      "operator": "lte",
+      "target": 75
+    }
+  ],
+  "hints": [
+    "The workload is read-heavy, but no particular component is mandatory.",
+    "A load balancer can distribute traffic across multiple API servers; each API instance and its processing slots use the budget."
+  ],
+  "allowedKinds": [
+    "source",
+    "api",
+    "load_balancer",
+    "cache",
+    "database",
+    "message_queue",
+    "worker",
+    "object_storage",
+    "cdn"
+  ],
+  "resourceBudget": {
+    "maxNodes": 7,
+    "maxSlots": 10,
+    "maxByKind": {
+      "source": 1,
+      "api": 3,
+      "load_balancer": 1,
+      "cache": 1,
+      "database": 1,
+      "message_queue": 1,
+      "worker": 2,
+      "object_storage": 1,
+      "cdn": 1
+    },
+    "maxProcessingSlotsPerNode": 4
+  },
+  "componentSpecs": {
+    "api": {
+      "meanServiceTimeUs": 2500,
+      "queueLimit": 120
+    },
+    "load_balancer": {
+      "meanServiceTimeUs": 100,
+      "queueLimit": 120
+    },
+    "cache": {
+      "meanServiceTimeUs": 200,
+      "queueLimit": 120,
+      "hitRate": 0.8
+    },
+    "database": {
+      "meanServiceTimeUs": 7000,
+      "queueLimit": 120
+    },
+    "message_queue": {
+      "meanServiceTimeUs": 2000,
+      "queueLimit": 120
+    },
+    "worker": {
+      "meanServiceTimeUs": 1200,
+      "queueLimit": 120
+    },
+    "object_storage": {
+      "meanServiceTimeUs": 1500,
+      "queueLimit": 120
+    },
+    "cdn": {
+      "meanServiceTimeUs": 150,
+      "queueLimit": 120,
+      "hitRate": 0.8
+    }
+  },
+  "solution": {
+    "explanation": "The CDN serves most read requests at the edge. Cache misses continue to the API instance; its hit and miss behavior is visible on the diagram.",
+    "architecture": {
+      "schemaVersion": 3,
+      "nodes": [
+        {
+          "id": "source",
+          "kind": "source",
+          "label": "Clients",
+          "position": {
+            "x": 80,
+            "y": 170
+          },
+          "config": {
+            "queueLimit": 0
+          }
+        },
+        {
+          "id": "cdn",
+          "kind": "cdn",
+          "label": "Edge CDN",
+          "position": {
+            "x": 310,
+            "y": 200
+          },
+          "config": {
+            "meanServiceTimeUs": 150,
+            "queueLimit": 120,
+            "hitRate": 0.8,
+            "processingSlots": 2,
+            "maxInFlight": 122
+          }
+        },
+        {
+          "id": "api",
+          "kind": "api",
+          "label": "Origin API",
+          "position": {
+            "x": 570,
+            "y": 200
+          },
+          "config": {
+            "meanServiceTimeUs": 2500,
+            "queueLimit": 120,
+            "processingSlots": 2,
+            "maxInFlight": 122
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "solution-1",
+          "source": "source",
+          "target": "cdn",
+          "route": "always",
+          "delayUs": 0
+        },
+        {
+          "id": "solution-2",
+          "source": "cdn",
+          "target": "api",
+          "route": "cache_miss",
+          "delayUs": 0
+        }
+      ]
+    }
+  }
+}

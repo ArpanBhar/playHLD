@@ -1,0 +1,14 @@
+node_modules/
+frontend/dist/
+frontend/public/wasm/*.wasm
+frontend/public/wasm/wasm_exec.js
+frontend/public/wasm/manifest.json
+frontend/src/simulation/wasm_exec.js
+*.tsbuildinfo
+.cache/
+.env
+*.log
+coverage/
+test-results/
+playwright-report/
+

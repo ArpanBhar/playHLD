@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://systemforge.local/schemas/v2/architecture.schema.json",
+  "title": "SystemForge architecture version 2 (one node per component instance)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "nodes", "edges"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "nodes": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/node" } },
+    "edges": { "type": "array", "maxItems": 300, "items": { "$ref": "#/$defs/edge" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[A-Za-z0-9_-]+$" },
+    "node": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "position", "config"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["source", "load_balancer", "api", "worker", "cache", "cdn", "database", "object_storage", "message_queue"] },
+        "label": { "type": "string", "maxLength": 120 },
+        "position": { "type": "object", "additionalProperties": false, "required": ["x", "y"], "properties": {
+          "x": { "type": "number", "minimum": -100000, "maximum": 100000 },
+          "y": { "type": "number", "minimum": -100000, "maximum": 100000 }
+        } },
+        "config": { "type": "object", "additionalProperties": false, "properties": {
+          "concurrency": { "type": "integer", "minimum": 1, "maximum": 1000 },
+          "meanServiceTimeUs": { "type": "integer", "minimum": 1, "maximum": 300000000 },
+          "serviceTimeModel": { "enum": ["constant", "exponential"] },
+          "readServiceTimeUs": { "type": "integer", "minimum": 0, "maximum": 300000000 },
+          "writeServiceTimeUs": { "type": "integer", "minimum": 0, "maximum": 300000000 },
+          "hitRate": { "type": "number", "minimum": 0, "maximum": 1 },
+          "routingPolicy": { "enum": ["round_robin", "weighted"] },
+          "queueLimit": { "type": "integer", "minimum": 0, "maximum": 100000 }
+        } }
+      }
+    },
+    "edge": { "type": "object", "additionalProperties": false, "required": ["id", "source", "target", "route"], "properties": {
+      "id": { "$ref": "#/$defs/id" },
+      "source": { "$ref": "#/$defs/id" },
+      "target": { "$ref": "#/$defs/id" },
+      "route": { "enum": ["always", "cache_hit", "cache_miss", "weighted"] },
+      "weight": { "type": "number", "minimum": 0, "maximum": 1 },
+      "delayUs": { "type": "integer", "minimum": 0, "maximum": 300000000 }
+    } }
+  }
+}

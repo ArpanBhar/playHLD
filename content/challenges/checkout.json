@@ -1,0 +1,257 @@
+{
+  "id": "checkout-flash-sale",
+  "version": 3,
+  "title": "Flash-sale checkout",
+  "difficulty": "Advanced",
+  "scenario": "A promotion sends 1,200 checkout requests per second to your service. Keep successful purchases responsive at the 95th and 99th percentiles. You have little room for extra components, so spend the capacity budget carefully.",
+  "starter": {
+    "schemaVersion": 3,
+    "nodes": [
+      {
+        "id": "source",
+        "kind": "source",
+        "label": "Customers",
+        "position": {
+          "x": 80,
+          "y": 170
+        },
+        "config": {
+          "queueLimit": 0
+        }
+      },
+      {
+        "id": "api",
+        "kind": "api",
+        "label": "Checkout server",
+        "position": {
+          "x": 480,
+          "y": 170
+        },
+        "config": {
+          "meanServiceTimeUs": 2500,
+          "queueLimit": 90,
+          "processingSlots": 1,
+          "maxInFlight": 91
+        }
+      }
+    ],
+    "edges": []
+  },
+  "workload": {
+    "schemaVersion": 1,
+    "seed": "45",
+    "entryNodeId": "source",
+    "durationUs": 10000000,
+    "drainTimeoutUs": 1000000,
+    "arrivalRateRps": 1200,
+    "readFraction": 0
+  },
+  "goals": [
+    {
+      "id": "success",
+      "label": "Complete at least 99% of checkouts",
+      "metric": "success_fraction",
+      "operator": "gte",
+      "target": 99
+    },
+    {
+      "id": "p95",
+      "label": "P95 latency at or below 55 ms",
+      "metric": "p95_latency_us",
+      "operator": "lte",
+      "target": 55
+    },
+    {
+      "id": "p99",
+      "label": "P99 latency at or below 85 ms",
+      "metric": "p99_latency_us",
+      "operator": "lte",
+      "target": 85
+    }
+  ],
+  "hints": [
+    "Writes cannot benefit from cache hits in this workload.",
+    "Extra processing slots are more useful than a large queue when tail latency matters."
+  ],
+  "allowedKinds": [
+    "source",
+    "api",
+    "load_balancer",
+    "cache",
+    "database",
+    "message_queue",
+    "worker",
+    "object_storage",
+    "cdn"
+  ],
+  "resourceBudget": {
+    "maxNodes": 5,
+    "maxSlots": 9,
+    "maxByKind": {
+      "source": 1,
+      "api": 2,
+      "load_balancer": 1,
+      "cache": 1,
+      "database": 1,
+      "message_queue": 1,
+      "worker": 2,
+      "object_storage": 1,
+      "cdn": 1
+    },
+    "maxProcessingSlotsPerNode": 4
+  },
+  "componentSpecs": {
+    "api": {
+      "meanServiceTimeUs": 2500,
+      "queueLimit": 90
+    },
+    "load_balancer": {
+      "meanServiceTimeUs": 100,
+      "queueLimit": 90
+    },
+    "cache": {
+      "meanServiceTimeUs": 250,
+      "queueLimit": 90,
+      "hitRate": 0.8
+    },
+    "database": {
+      "meanServiceTimeUs": 2000,
+      "queueLimit": 90
+    },
+    "message_queue": {
+      "meanServiceTimeUs": 2000,
+      "queueLimit": 90
+    },
+    "worker": {
+      "meanServiceTimeUs": 1200,
+      "queueLimit": 90
+    },
+    "object_storage": {
+      "meanServiceTimeUs": 1500,
+      "queueLimit": 90
+    },
+    "cdn": {
+      "meanServiceTimeUs": 150,
+      "queueLimit": 90,
+      "hitRate": 0.8
+    }
+  },
+  "solution": {
+    "explanation": "One load balancer spreads checkout writes between two API instances, which both use a single database instance. The database is explicitly drawn and budgeted.",
+    "architecture": {
+      "schemaVersion": 3,
+      "nodes": [
+        {
+          "id": "source",
+          "kind": "source",
+          "label": "Customers",
+          "position": {
+            "x": 80,
+            "y": 170
+          },
+          "config": {
+            "queueLimit": 0
+          }
+        },
+        {
+          "id": "balancer",
+          "kind": "load_balancer",
+          "label": "Load balancer",
+          "position": {
+            "x": 300,
+            "y": 210
+          },
+          "config": {
+            "meanServiceTimeUs": 100,
+            "queueLimit": 90,
+            "routingPolicy": "round_robin",
+            "processingSlots": 1,
+            "maxInFlight": 91
+          }
+        },
+        {
+          "id": "api",
+          "kind": "api",
+          "label": "Checkout API A",
+          "position": {
+            "x": 550,
+            "y": 95
+          },
+          "config": {
+            "meanServiceTimeUs": 2500,
+            "queueLimit": 90,
+            "processingSlots": 2,
+            "maxInFlight": 92
+          }
+        },
+        {
+          "id": "api-b",
+          "kind": "api",
+          "label": "Checkout API B",
+          "position": {
+            "x": 550,
+            "y": 325
+          },
+          "config": {
+            "meanServiceTimeUs": 2500,
+            "queueLimit": 90,
+            "processingSlots": 2,
+            "maxInFlight": 92
+          }
+        },
+        {
+          "id": "db",
+          "kind": "database",
+          "label": "Orders DB",
+          "position": {
+            "x": 820,
+            "y": 210
+          },
+          "config": {
+            "meanServiceTimeUs": 2000,
+            "queueLimit": 90,
+            "processingSlots": 3,
+            "maxInFlight": 93
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "solution-1",
+          "source": "source",
+          "target": "balancer",
+          "route": "always",
+          "delayUs": 0
+        },
+        {
+          "id": "solution-2",
+          "source": "balancer",
+          "target": "api",
+          "route": "always",
+          "delayUs": 0
+        },
+        {
+          "id": "solution-3",
+          "source": "balancer",
+          "target": "api-b",
+          "route": "always",
+          "delayUs": 0
+        },
+        {
+          "id": "solution-4",
+          "source": "api",
+          "target": "db",
+          "route": "always",
+          "delayUs": 0
+        },
+        {
+          "id": "solution-5",
+          "source": "api-b",
+          "target": "db",
+          "route": "always",
+          "delayUs": 0
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://systemforge.local/schemas/v3/simulation.schema.json",
+  "title": "SystemForge simulation config with architecture version 3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "architecture",
+    "workload",
+    "snapshotIntervalUs"
+  ],
+  "properties": {
+    "architecture": {
+      "$ref": "architecture.schema.json"
+    },
+    "workload": {
+      "$ref": "../v1/workload.schema.json"
+    },
+    "snapshotIntervalUs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300000000
+    }
+  }
+}
