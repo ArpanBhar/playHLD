@@ -1,6 +1,6 @@
-# SystemForge decisions
+# playHLD decisions
 
-The source specification is `SystemForge_Product_and_Technical_Specification_v2.docx`; the implementation sequence is in `SYSTEMFORGE_IMPLEMENTATION_PLAN.md`. Later sections 18–25 of the specification govern revised scope.
+The source is the supplied product and technical specification, version 2; the implementation sequence is in `PLAYHLD_IMPLEMENTATION_PLAN.md`. Later sections 18–25 of the specification govern revised scope.
 
 1. Architecture graph and workload are separate documents. Browser and backend simulation both consume a `SimulationConfig` containing both.
 2. Incomplete but structurally valid drafts may be saved. Execution requires a reachable source and complete directed routes.
@@ -12,4 +12,5 @@ The source specification is `SystemForge_Product_and_Technical_Specification_v2.
 8. The editor's live preview runs paced bounded engine windows continuously until paused or stopped. Valid topology additions and component setting edits update the current engine in place, preserving existing requests. Workload changes, removals, and window boundaries create a fresh engine. Fixed deterministic runs remain separate for Practice goals and Dev persistence; see `docs/modeling-semantics.md`.
 9. Architecture schema version 2 makes each component node one instance. The capacity field is `concurrency`, with no hidden replica multiplier. Load balancers split to explicit targets; queues dispatch to explicit consumers. The Clients source remains a workload generator. Version 1 browser drafts and imports are converted into visible nodes and balancers; native APIs accept version 2. See `docs/implementation-checkpoint.md` for the implementation handoff.
 10. Architecture schema version 3 separates `processingSlots` from `maxInFlight`. The former is provisioned parallel capacity and determines processing utilization; the latter is an admission limit and cannot increase throughput by itself. Published problem budgets charge processing slots. Browser imports migrate version 1 and 2 designs; native APIs accept version 3.
+11. The product is named playHLD. Go module imports, package metadata, WebAssembly bridge names, API and browser labels, schema IDs, and documentation use that name. Browser storage reads the previous prefix as a compatibility path so existing drafts and layouts survive the rename.
 

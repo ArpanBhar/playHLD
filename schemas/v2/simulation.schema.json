@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://systemforge.local/schemas/v2/simulation.schema.json",
-  "title": "SystemForge simulation config with architecture version 2",
+  "$id": "https://playhld.local/schemas/v2/simulation.schema.json",
+  "title": "playHLD simulation config with architecture version 2",
   "type": "object",
   "additionalProperties": false,
   "required": ["architecture", "workload", "snapshotIntervalUs"],

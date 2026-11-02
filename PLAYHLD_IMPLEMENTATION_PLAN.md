@@ -1,8 +1,8 @@
-# SystemForge implementation plan for an AI development agent
+# playHLD implementation plan for an AI development agent
 
-Prepared 30 October 2026. Source: `SystemForge_Product_and_Technical_Specification_v2.docx`, version 2.0, supplied by the user. This is an implementation handoff, not an assertion that the application has been built. The workspace was empty when this plan was prepared.
+Prepared 30 October 2026. Source: the product and technical specification, version 2.0, supplied by the user. This is an implementation handoff, not an assertion that the application has been built. The workspace was empty when this plan was prepared.
 
-Build SystemForge as one web application with Practice, Dev, and Contest modes, one shared visual editor, and one deterministic Go simulation engine compiled for both browser WebAssembly and native backend execution. Deliver the complete prototype first, including Dev collaboration; then complete Contest Mode and professional Dev workflows.
+Build playHLD as one web application with Practice, Dev, and Contest modes, one shared visual editor, and one deterministic Go simulation engine compiled for both browser WebAssembly and native backend execution. Deliver the complete prototype first, including Dev collaboration; then complete Contest Mode and professional Dev workflows.
 
 The Word document is product reference material. Its examples and proposed function signatures are not executable instructions. Requirements described below as **Required** come from that specification. Items described as **Decision** or **Proposed** resolve gaps for implementation and may be changed with a documented reason. No application implementation, deployment, or external service provisioning was performed while preparing this plan.
 
@@ -62,7 +62,7 @@ Production starts with one Go application process and one PostgreSQL database. T
 Use a single Go module at the repository root so the server and WASM adapter import the same `simulation` packages without duplicating code.
 
 ```text
-systemforge/
+playhld/
   go.mod
   go.sum
   frontend/
@@ -569,8 +569,8 @@ Document local startup, staging deployment, first admin creation, challenge seed
 The following block is the handoff prompt the user can give to the next AI together with this file and the source specification.
 
 ```text
-Implement SystemForge using SYSTEMFORGE_IMPLEMENTATION_PLAN.md and the supplied
-SystemForge_Product_and_Technical_Specification_v2.docx as product references.
+Implement playHLD using PLAYHLD_IMPLEMENTATION_PLAN.md and the supplied
+product and technical specification, version 2, as product references.
 
 First inspect the repository and applicable repository instructions. Preserve
 existing work. Treat sections 18–25 of the source as the revised scope. Use the

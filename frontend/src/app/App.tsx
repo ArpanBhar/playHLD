@@ -19,11 +19,12 @@ import type { Architecture, ArchitectureEdge, Challenge, GoalOutcome, Kind, Node
 
 type Mode = 'Practice' | 'Dev' | 'Contest'
 const EditorCanvas = lazy(() => import('../editor/EditorCanvas'))
-const localDraftKey = 'systemforge:draft:v3'
-const practiceDraftKey = (id: string, version: number) => `systemforge:practice:${id}:v${version}`
+const localDraftKey = 'playhld:draft:v3'
+const practiceDraftKey = (id: string, version: number) => `playhld:practice:${id}:v${version}`
+const legacyPracticeDraftKey = (id: string, version: number) => `systemforge:practice:${id}:v${version}`
 
 function loadDraft(): Architecture {
-  for (const key of [localDraftKey, 'systemforge:draft:v2', 'systemforge:draft:v1']) {
+  for (const key of [localDraftKey, 'systemforge:draft:v3', 'systemforge:draft:v2', 'systemforge:draft:v1']) {
     try {
       const raw = localStorage.getItem(key)
       if (raw) return parseArchitecture(JSON.parse(raw))
@@ -381,13 +382,14 @@ export default function App() {
       devWorkloadRef.current = { rateRps, durationSeconds, readPercent, profile, arrivalModel, seed }
     }
     let graph = parseArchitecture(item.starter)
-    try {
-      const saved = localStorage.getItem(practiceDraftKey(item.id, item.version))
-      if (saved) {
+    for (const key of [practiceDraftKey(item.id, item.version), legacyPracticeDraftKey(item.id, item.version)]) {
+      try {
+        const saved = localStorage.getItem(key)
+        if (!saved) continue
         const draft = parseArchitecture(JSON.parse(saved))
-        if (!problemGraphError(item, draft)) graph = draft
-      }
-    } catch { /* damaged browser draft falls back to starter */ }
+        if (!problemGraphError(item, draft)) { graph = draft; break }
+      } catch { /* Try the older key if this draft is damaged. */ }
+    }
     architectureRef.current = graph; setArchitecture(graph); setHistory([]); setFuture([])
     setChallenge(item); setMode('Practice'); setProblemsOpen(false); setSelectedId(graph.nodes.find(node => node.kind !== 'source')?.id || null)
     setRateRps(item.workload.arrivalRateRps); setDurationSeconds(item.workload.durationUs / 1_000_000)
@@ -404,6 +406,7 @@ export default function App() {
     setSelectedId(graph.nodes.find(node => node.kind !== 'source')?.id || null)
     setLastRunGraph(null); setVerifiedGoals(null)
     localStorage.removeItem(practiceDraftKey(challenge.id, challenge.version))
+    localStorage.removeItem(legacyPracticeDraftKey(challenge.id, challenge.version))
   }
 
   const loadSolution = () => {
@@ -582,7 +585,7 @@ export default function App() {
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = 'systemforge-architecture.json'
+    anchor.download = 'playHLD-architecture.json'
     anchor.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
@@ -632,7 +635,7 @@ export default function App() {
   return <>
     <div className={`app-shell page-${page} ${navigationType === 'POP' ? 'page-pop' : ''}`}>
       <header className={`app-header ${showBrowseNav ? 'browse-header' : ''} ${simulation.status === 'running' || simulation.status === 'paused' ? 'simulation-active' : ''}`}>
-        <button type="button" className="brand-mark" aria-label="SystemForge home" title="SystemForge home" onClick={() => openPage('/')}><img src="/favicon.svg" alt="" /></button>
+        <button type="button" className="brand-mark" aria-label="playHLD home" title="playHLD home" onClick={() => openPage('/')}><img src="/favicon.svg" alt="" /></button>
         {showBrowseNav && <nav className="page-nav" aria-label="Pages"><button type="button" className={page === 'problems' ? 'active' : ''} aria-current={page === 'problems' ? 'page' : undefined} onClick={() => openPage('/problems')}>Problems</button><button type="button" onClick={() => openPage('/dev')}>Dev</button><button type="button" onClick={() => openPage('/contest')}>Contest</button></nav>}
         {practiceEditor && <button type="button" className="header-problems-button" aria-expanded={problemsOpen} aria-controls="problems-drawer" onClick={() => setProblemsOpen(value => !value)}><PanelLeftOpen size={16} />Problems</button>}
         {page !== 'home' && page !== 'problems' && <strong className="header-page-title">{page === 'practice-editor' ? challenge?.title ?? 'Problem' : page === 'dev' ? designName : page === 'contest' ? 'Contest' : ''}</strong>}
@@ -692,7 +695,7 @@ export default function App() {
       {notice && <div className="notice" role="status"><span>{notice}</span><button type="button" aria-label="Dismiss notice" onClick={() => setNotice(null)}>×</button></div>}
       {authOpen && <div className="dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setAuthOpen(false) }}><section className="dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <button className="dialog-close" type="button" aria-label="Close sign-in" onClick={() => setAuthOpen(false)}>×</button>
-        <h2 id="auth-title">{authMode === 'login' ? 'Sign in to SystemForge' : 'Create your account'}</h2>
+        <h2 id="auth-title">{authMode === 'login' ? 'Sign in to playHLD' : 'Create your account'}</h2>
         <p>Save architecture designs to your private account.</p>
         <form onSubmit={event => void submitAuth(event)}>
           <label className="field"><span>Email</span><input type="email" autoComplete="email" required value={authEmail} onChange={event => setAuthEmail(event.target.value)} /></label>

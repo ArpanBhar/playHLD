@@ -1,6 +1,6 @@
 # Implementation status
 
-This file records verified behavior against [the implementation plan](../SYSTEMFORGE_IMPLEMENTATION_PLAN.md). The application is an active prototype, not a completed P0 release.
+This file records verified behavior against [the implementation plan](../PLAYHLD_IMPLEMENTATION_PLAN.md). The application is an active prototype, not a completed P0 release.
 
 | Milestone | Current state | Evidence and remaining work |
 | --- | --- | --- |
@@ -25,6 +25,7 @@ This file records verified behavior against [the implementation plan](../SYSTEMF
 - The Problems Chrome check at 1440 px and 390 px confirmed five catalog entries, two starter nodes and no routes, left drawer and goals, add/delete of an optional component, direct client-to-server connection, and a fixed run meeting all three goals including P99. No page errors or mobile horizontal overflow appeared. Go tests prove each published problem has a passing budgeted solution and reject over-budget or tampered component performance.
 - The architecture v2 Chrome check confirmed a two-node empty starter; loading the worked solution added a visible load balancer and two API instances, and all three goals passed in browser WASM. Live Run/Stop, the new palette items, a 390 px solution view without page overflow, and migration of a v1 local draft into explicit instances passed without console errors. Go tests simulate all five worked solutions; the queue example dispatches jobs to two separate workers.
 - Architecture v3 separates budgeted processing slots from the in-flight admission limit. The engine reports processing-slot occupancy as `processingUtilization`. A focused engine test confirms that raising only the in-flight limit does not add processing throughput or lower processing utilization. Browser live QA showed API A at 50% busy before and after increasing its in-flight limit from 20 to 220; provisioning 40 rather than 20 processing slots changed its busy percentage to 25%. The capacity problem's loaded solution still passed all three goals. Existing v2 local drafts migrated to v3, and the 390 px editor had no horizontal overflow.
+- The playHLD rename passed `go test ./...`, `npm test`, and `npm run build`. Chrome displayed the new page title and sign-in copy, completed a worked problem through WASM with three passing goals, and migrated older Dev drafts, problem drafts, and workspace layout settings to the new browser storage keys without JavaScript errors or mobile overflow.
 
 ## Next implementation step
 

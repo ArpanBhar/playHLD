@@ -65,7 +65,7 @@ export default function LandingPage({ onNavigate }: { onNavigate: (destination: 
       </section>
 
       <section className="landing-final-cta" aria-labelledby="landing-cta-title"><div><h2 id="landing-cta-title">Your next architecture starts here.</h2><p>Pick a challenge. Build your own solution.</p></div><a className="landing-button landing-button-primary" href="/problems" onClick={follow('/problems')}>Explore problems <ArrowRight size={19} /></a></section>
-      <footer className="landing-footer"><div className="landing-footer-brand"><img src="/favicon.svg" width="30" height="30" alt="SystemForge" /><span>System design, made tangible.</span></div><nav aria-label="Footer"><a href="/problems" onClick={follow('/problems')}>Problems</a><a href="/dev" onClick={follow('/dev')}>Dev</a><a href="/contest" onClick={follow('/contest')}>Contest</a></nav></footer>
+      <footer className="landing-footer"><div className="landing-footer-brand"><img src="/favicon.svg" width="30" height="30" alt="playHLD" /><span>System design, made tangible.</span></div><nav aria-label="Footer"><a href="/problems" onClick={follow('/problems')}>Problems</a><a href="/dev" onClick={follow('/dev')}>Dev</a><a href="/contest" onClick={follow('/contest')}>Contest</a></nav></footer>
     </div>
   </main>
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://systemforge.local/schemas/v1/workload.schema.json",
-  "title": "SystemForge workload version 1",
+  "$id": "https://playhld.local/schemas/v1/workload.schema.json",
+  "title": "playHLD workload version 1",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "seed", "entryNodeId", "durationUs", "drainTimeoutUs", "arrivalRateRps"],

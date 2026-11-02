@@ -1,6 +1,6 @@
 # Modeling semantics
 
-SystemForge simulates synthetic requests against the configured graph. The numbers are model estimates, not measurements of a deployed system.
+playHLD simulates synthetic requests against the configured graph. The numbers are model estimates, not measurements of a deployed system.
 
 ## Diagram and capacity
 

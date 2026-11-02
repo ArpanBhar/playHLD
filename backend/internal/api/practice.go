@@ -9,10 +9,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"systemforge/content/challenges"
-	"systemforge/simulation/engine"
-	"systemforge/simulation/goals"
-	"systemforge/simulation/model"
+	"playhld/content/challenges"
+	"playhld/simulation/engine"
+	"playhld/simulation/goals"
+	"playhld/simulation/model"
 )
 
 type practiceInput struct {

@@ -11,8 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"systemforge/simulation/engine"
-	"systemforge/simulation/model"
+	"playhld/simulation/engine"
+	"playhld/simulation/model"
 )
 
 type runInput struct {

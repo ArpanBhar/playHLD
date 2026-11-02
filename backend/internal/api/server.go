@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"systemforge/simulation/engine"
-	"systemforge/simulation/model"
+	"playhld/simulation/engine"
+	"playhld/simulation/model"
 )
 
 type errorEnvelope struct {

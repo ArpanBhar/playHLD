@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"systemforge/backend/internal/storage"
-	"systemforge/content/challenges"
+	"playhld/backend/internal/storage"
+	"playhld/content/challenges"
 )
 
 func TestProjectDraftAndImmutableVersions(t *testing.T) {

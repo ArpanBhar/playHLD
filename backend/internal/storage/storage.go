@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"systemforge/backend/migrations"
+	"playhld/backend/migrations"
 )
 
 func Open(ctx context.Context, url string) (*pgxpool.Pool, error) {

@@ -6,7 +6,8 @@ export interface WorkspaceLayout {
   descriptionExpanded: boolean
 }
 
-const storageKey = 'systemforge:workspace-layout:v1'
+const storageKey = 'playhld:workspace-layout:v1'
+const legacyStorageKey = 'systemforge:workspace-layout:v1'
 
 export const defaultWorkspaceLayout: WorkspaceLayout = {
   panelSizes: { rail: 160, inspector: 220, metrics: 244 },
@@ -28,7 +29,7 @@ function flag(value: unknown, fallback: boolean): boolean {
 
 export function loadWorkspaceLayout(): WorkspaceLayout {
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null') as Partial<WorkspaceLayout> | null
+    const saved = JSON.parse(localStorage.getItem(storageKey) ?? localStorage.getItem(legacyStorageKey) ?? 'null') as Partial<WorkspaceLayout> | null
     const defaults = defaultWorkspaceLayout
     return {
       panelSizes: {

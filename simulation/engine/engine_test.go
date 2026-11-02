@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"systemforge/simulation/model"
+	"playhld/simulation/model"
 )
 
 func fixture(rate, duration, drain, service int64, queue int) model.SimulationConfig {

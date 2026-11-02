@@ -28,5 +28,5 @@ const goRoot = execFileSync('go', ['env', 'GOROOT'], { cwd: root, env, encoding:
 const toolchain = execFileSync('go', ['version'], { cwd: root, env, encoding: 'utf8' }).trim()
 execFileSync('go', ['build', '-o', join(publicDir, 'simulator.wasm'), './wasm/cmd/simulator'], { cwd: root, env, stdio: 'inherit' })
 copyFileSync(join(goRoot, 'lib', 'wasm', 'wasm_exec.js'), join(sourceDir, 'wasm_exec.js'))
-writeFileSync(join(publicDir, 'manifest.json'), JSON.stringify({ engineVersion: '0.4.0', schemaVersion: 1, toolchain }, null, 2) + '\n')
+writeFileSync(join(publicDir, 'manifest.json'), JSON.stringify({ engineVersion: '0.6.0', schemaVersion: 3, toolchain }, null, 2) + '\n')
 console.log(`Built Go WASM with ${toolchain}`)

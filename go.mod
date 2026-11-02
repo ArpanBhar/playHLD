@@ -1,4 +1,4 @@
-module systemforge
+module playhld
 
 go 1.26.0
 

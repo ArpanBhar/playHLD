@@ -1,6 +1,6 @@
-# SystemForge
+# playHLD
 
-SystemForge is a web prototype for sketching a service architecture and observing synthetic load in a deterministic Go simulator. The same engine runs as native Go in the backend and as WebAssembly in a dedicated browser worker. See the [implementation plan](SYSTEMFORGE_IMPLEMENTATION_PLAN.md) and [verified status](docs/implementation-status.md).
+playHLD is a web prototype for sketching a service architecture and observing synthetic load in a deterministic Go simulator. The same engine runs as native Go in the backend and as WebAssembly in a dedicated browser worker. See the [implementation plan](PLAYHLD_IMPLEMENTATION_PLAN.md) and [verified status](docs/implementation-status.md).
 
 The current application has a shared graph editor, anonymous local simulation, five Problems, signed-in server-verified attempts, private saved designs, and Dev projects with editable drafts, immutable versions, steady/ramp/burst traffic, seeded Poisson arrivals, exponential service times, saved native runs and comparisons. Collaboration and Contest remain under development. Simulated metrics are model estimates, not production capacity claims.
 
@@ -10,14 +10,18 @@ Drag the separators to resize the description, component list, inspector, and me
 
 The Problems page lists scenarios; picking one opens the editor with only a client and API server. Add, connect, and remove components, then use Check goals for a fixed run. The description pane shows goals, resource limits, and an optional Solution tab with a tested example design that can be loaded onto the canvas. Service time, queue size, and cache hit rate are fixed for each problem; topology and per-instance processing slots can vary within the component and slot budget. The max in-flight limit can change how many requests wait, but not processing throughput. Server verification enforces these rules independently of the browser. Both P95 and P99 latency are scored. Run simulation starts a wall-clock paced live preview; the toolbar changes to Pause/Resume and Stop. Connected graph and setting edits update the live engine, and moving dots sample traversals on active routes. Nodes show processing-slot occupancy or cache hit/miss rate with green-to-red health coloring. Use Capture fixed run in Dev for a bounded, reproducible result. See [modeling semantics](docs/modeling-semantics.md) for the model's behavior and limits.
 
-The native API accepts architecture schema version 3. Browser drafts and imported version 1 or 2 diagrams are converted when opened; old capacity values become processing slots, and old version 1 replicas become visible component instances and routing nodes.
+The native API accepts architecture schema version 3. Browser drafts and imported version 1 or 2 diagrams are converted when opened; old capacity values become processing slots, and old version 1 replicas become visible component instances and routing nodes. The playHLD browser storage keys read existing drafts and editor layouts saved under the previous project name.
 
 ## Local development
 
-Requires Go 1.26, Node 24/npm, and PostgreSQL 18 for accounts and persistence. Create an empty PostgreSQL database and set `DATABASE_URL`; the API applies its migrations on startup. In one terminal from the repository root:
+Requires Go 1.26, Node 24/npm, and PostgreSQL 18 for accounts and persistence. Create an empty PostgreSQL database and set `DATABASE_URL`; the API applies its migrations on startup.
+
+If you already have a database for this app, keep its current database name in `DATABASE_URL`. Renaming the application does not rename an existing PostgreSQL database.
+
+In one terminal from the repository root:
 
 ```powershell
-$env:DATABASE_URL = 'postgres://USER:PASSWORD@127.0.0.1:5432/systemforge?sslmode=disable'
+$env:DATABASE_URL = 'postgres://USER:PASSWORD@127.0.0.1:5432/playhld?sslmode=disable'
 go run ./backend/cmd/server
 ```
 

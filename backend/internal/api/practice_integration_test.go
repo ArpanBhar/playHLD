@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"systemforge/backend/internal/storage"
-	"systemforge/content/challenges"
-	"systemforge/simulation/model"
+	"playhld/backend/internal/storage"
+	"playhld/content/challenges"
+	"playhld/simulation/model"
 )
 
 func TestPracticeAttemptIsServerVerifiedAndPrivate(t *testing.T) {

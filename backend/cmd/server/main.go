@@ -9,8 +9,8 @@ import (
 	"os/signal"
 	"time"
 
-	"systemforge/backend/internal/api"
-	"systemforge/backend/internal/storage"
+	"playhld/backend/internal/api"
+	"playhld/backend/internal/storage"
 )
 
 func main() {
@@ -46,7 +46,7 @@ func main() {
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()
-	log.Printf("SystemForge bootstrap API listening on %s", server.Addr)
+	log.Printf("playHLD API listening on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}

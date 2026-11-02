@@ -12,7 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"systemforge/simulation/model"
+	"playhld/simulation/model"
 )
 
 type workspaceInput struct {

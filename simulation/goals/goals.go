@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math"
 
-	"systemforge/simulation/engine"
-	"systemforge/simulation/model"
+	"playhld/simulation/engine"
+	"playhld/simulation/model"
 )
 
 type Rule struct {

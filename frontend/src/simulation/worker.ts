@@ -5,14 +5,14 @@ import type { GoalOutcome, Result, Snapshot } from './types'
 type GoRuntime = { importObject: WebAssembly.Imports; run: (instance: WebAssembly.Instance) => Promise<void> }
 type WasmScope = DedicatedWorkerGlobalScope & {
   Go: new () => GoRuntime
-  systemForgeReady?: boolean
-  systemForgeCreate?: (config: string) => string
-  systemForgeStep?: (handle: string, batchSize: number) => string
-  systemForgeStepUntilSnapshot?: (handle: string, batchSize: number) => string
-  systemForgeUpdateArchitecture?: (handle: string, architecture: string) => string
-  systemForgeReset?: (handle: string) => string
-  systemForgeDispose?: (handle: string) => string
-  systemForgeEvaluateGoals?: (result: string, workload: string, goals: string) => string
+  playHLDReady?: boolean
+  playHLDCreate?: (config: string) => string
+  playHLDStep?: (handle: string, batchSize: number) => string
+  playHLDStepUntilSnapshot?: (handle: string, batchSize: number) => string
+  playHLDUpdateArchitecture?: (handle: string, architecture: string) => string
+  playHLDReset?: (handle: string) => string
+  playHLDDispose?: (handle: string) => string
+  playHLDEvaluateGoals?: (result: string, workload: string, goals: string) => string
 }
 type Reply = { ok: boolean; handle?: string; outcome?: { snapshots: Snapshot[]; processedEvents: number; done: boolean; result?: Result }; goals?: GoalOutcome[]; error?: string }
 
@@ -48,10 +48,10 @@ async function init() {
   const bytes = await source.arrayBuffer()
   const instance = await WebAssembly.instantiate(bytes, go.importObject)
   void go.run(instance.instance).catch(error => scope.postMessage({ type: 'ERROR', runId, message: String(error) }))
-  for (let tries = 0; tries < 100 && !scope.systemForgeReady; tries += 1) {
+  for (let tries = 0; tries < 100 && !scope.playHLDReady; tries += 1) {
     await new Promise(resolve => setTimeout(resolve, 50))
   }
-  if (!scope.systemForgeReady) throw new Error('Go runtime did not become ready')
+  if (!scope.playHLDReady) throw new Error('Go runtime did not become ready')
   initialized = true
 }
 
@@ -61,12 +61,12 @@ function dispose() {
   if (liveTimer !== null) clearTimeout(liveTimer)
   liveTimer = null
   pendingLive = null
-  if (handle && scope.systemForgeDispose) decode(scope.systemForgeDispose(handle))
+  if (handle && scope.playHLDDispose) decode(scope.playHLDDispose(handle))
   handle = null
 }
 
 function createHandle(config: string) {
-  const created = decode(scope.systemForgeCreate!(config)).handle
+  const created = decode(scope.playHLDCreate!(config)).handle
   if (!created) throw new Error('Engine did not return a handle')
   return created
 }
@@ -94,7 +94,7 @@ function queueLiveFrame(snapshot: Snapshot, after: () => void) {
 
 function restartLive(expectedRunId: number, expectedGeneration: number) {
   if (!running || expectedRunId !== runId || expectedGeneration !== generation || !liveConfig) return
-  if (handle) decode(scope.systemForgeDispose!(handle))
+  if (handle) decode(scope.playHLDDispose!(handle))
   handle = createHandle(liveConfig)
   liveOffsetUs = liveCurrentUs
   if (liveLastSnapshot) liveBase = { offered: liveLastSnapshot.offered, succeeded: liveLastSnapshot.succeeded, failed: liveLastSnapshot.failed }
@@ -104,7 +104,7 @@ function restartLive(expectedRunId: number, expectedGeneration: number) {
 function pumpLive(expectedRunId: number, expectedGeneration: number) {
   if (!running || !handle || expectedRunId !== runId || expectedGeneration !== generation || pendingLive) return
   try {
-    const outcome = decode(scope.systemForgeStepUntilSnapshot!(handle, 2_000)).outcome!
+    const outcome = decode(scope.playHLDStepUntilSnapshot!(handle, 2_000)).outcome!
     if (outcome.snapshots?.length) {
       queueLiveFrame(outcome.snapshots[0], () => setTimeout(() => pumpLive(expectedRunId, expectedGeneration), 0))
     } else if (outcome.done) {
@@ -126,11 +126,11 @@ function pumpLive(expectedRunId: number, expectedGeneration: number) {
 function pump(expectedRunId: number) {
   if (!running || !handle || expectedRunId !== runId) return
   try {
-    const outcome = decode(scope.systemForgeStep!(handle, 2_000)).outcome!
+    const outcome = decode(scope.playHLDStep!(handle, 2_000)).outcome!
     if (outcome.snapshots?.length) scope.postMessage({ type: 'SNAPSHOTS', runId, snapshots: outcome.snapshots, processedEvents: outcome.processedEvents })
     if (outcome.done) {
       running = false
-      const goals = goalRules && workload && outcome.result ? decode(scope.systemForgeEvaluateGoals!(JSON.stringify(outcome.result), workload, goalRules)).goals : undefined
+      const goals = goalRules && workload && outcome.result ? decode(scope.playHLDEvaluateGoals!(JSON.stringify(outcome.result), workload, goalRules)).goals : undefined
       scope.postMessage({ type: 'COMPLETED', runId, result: outcome.result, goals })
       return
     }
@@ -179,7 +179,7 @@ scope.onmessage = async event => {
       const sameWorkload = JSON.stringify(current.workload) === JSON.stringify(next.workload)
       const compatibleNodes = current.architecture.nodes.every(previous => next.architecture.nodes.some(node => node.id === previous.id && node.kind === previous.kind))
       if (sameWorkload && compatibleNodes) {
-        try { decode(scope.systemForgeUpdateArchitecture!(handle, JSON.stringify(next.architecture))) }
+        try { decode(scope.playHLDUpdateArchitecture!(handle, JSON.stringify(next.architecture))) }
         catch (error) { scope.postMessage({ type: 'CONFIG_ERROR', runId, message: error instanceof Error ? error.message : String(error) }); return }
         liveConfig = message.config
         scope.postMessage({ type: 'CONFIG_APPLIED', runId })
@@ -192,7 +192,7 @@ scope.onmessage = async event => {
       liveTimer = null
       pendingLive = null
       generation += 1
-      decode(scope.systemForgeDispose!(handle))
+      decode(scope.playHLDDispose!(handle))
       handle = replacement
       liveConfig = message.config
       liveOffsetUs = liveCurrentUs
@@ -216,7 +216,7 @@ scope.onmessage = async event => {
     } else if (message.type === 'RESET') {
       if (!handle) throw new Error('No run to reset')
       running = false
-      decode(scope.systemForgeReset!(handle))
+      decode(scope.playHLDReset!(handle))
     } else if (message.type === 'CANCEL' || message.type === 'DISPOSE') {
       dispose()
       scope.postMessage({ type: 'CANCELED', runId })

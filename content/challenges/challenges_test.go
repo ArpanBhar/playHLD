@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"systemforge/simulation/engine"
-	"systemforge/simulation/goals"
-	"systemforge/simulation/model"
+	"playhld/simulation/engine"
+	"playhld/simulation/goals"
+	"playhld/simulation/model"
 )
 
 func TestProblemsStartEmptyAndHaveFeasibleBudgetedSolution(t *testing.T) {

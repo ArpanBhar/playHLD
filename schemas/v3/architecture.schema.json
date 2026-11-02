@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://systemforge.local/schemas/v3/architecture.schema.json",
-  "title": "SystemForge architecture version 3 (processing slots and in-flight limit)",
+  "$id": "https://playhld.local/schemas/v3/architecture.schema.json",
+  "title": "playHLD architecture version 3 (processing slots and in-flight limit)",
   "type": "object",
   "additionalProperties": false,
   "required": [

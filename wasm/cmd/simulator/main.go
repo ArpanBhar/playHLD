@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"syscall/js"
 
-	"systemforge/simulation/engine"
-	"systemforge/simulation/goals"
-	"systemforge/simulation/model"
+	"playhld/simulation/engine"
+	"playhld/simulation/goals"
+	"playhld/simulation/model"
 )
 
 var handles = map[string]*engine.Engine{}
@@ -44,7 +44,7 @@ func register(name string, fn func([]js.Value) string) {
 }
 
 func main() {
-	register("systemForgeCreate", func(args []js.Value) string {
+	register("playHLDCreate", func(args []js.Value) string {
 		if len(args) != 1 || args[0].Type() != js.TypeString {
 			return errResponse(fmt.Errorf("expected config JSON string"))
 		}
@@ -70,7 +70,7 @@ func main() {
 		handles[id] = e
 		return encode(response{OK: true, Handle: id})
 	})
-	register("systemForgeStep", func(args []js.Value) string {
+	register("playHLDStep", func(args []js.Value) string {
 		if len(args) != 2 {
 			return errResponse(fmt.Errorf("expected handle and batch size"))
 		}
@@ -85,7 +85,7 @@ func main() {
 		}
 		return encode(response{OK: true, Outcome: &out})
 	})
-	register("systemForgeStepUntilSnapshot", func(args []js.Value) string {
+	register("playHLDStepUntilSnapshot", func(args []js.Value) string {
 		if len(args) != 2 {
 			return errResponse(fmt.Errorf("expected handle and batch size"))
 		}
@@ -99,7 +99,7 @@ func main() {
 		}
 		return encode(response{OK: true, Outcome: &out})
 	})
-	register("systemForgeUpdateArchitecture", func(args []js.Value) string {
+	register("playHLDUpdateArchitecture", func(args []js.Value) string {
 		if len(args) != 2 || args[1].Type() != js.TypeString {
 			return errResponse(fmt.Errorf("expected handle and architecture JSON"))
 		}
@@ -117,7 +117,7 @@ func main() {
 		}
 		return encode(response{OK: true})
 	})
-	register("systemForgeReset", func(args []js.Value) string {
+	register("playHLDReset", func(args []js.Value) string {
 		if len(args) != 1 {
 			return errResponse(fmt.Errorf("expected handle"))
 		}
@@ -130,14 +130,14 @@ func main() {
 		}
 		return encode(response{OK: true})
 	})
-	register("systemForgeDispose", func(args []js.Value) string {
+	register("playHLDDispose", func(args []js.Value) string {
 		if len(args) != 1 {
 			return errResponse(fmt.Errorf("expected handle"))
 		}
 		delete(handles, args[0].String())
 		return encode(response{OK: true})
 	})
-	register("systemForgeEvaluateGoals", func(args []js.Value) string {
+	register("playHLDEvaluateGoals", func(args []js.Value) string {
 		if len(args) != 3 {
 			return errResponse(fmt.Errorf("expected result, workload and goals JSON"))
 		}
@@ -163,6 +163,6 @@ func main() {
 		}
 		return encode(response{OK: true, Goals: data})
 	})
-	js.Global().Set("systemForgeReady", true)
+	js.Global().Set("playHLDReady", true)
 	select {}
 }

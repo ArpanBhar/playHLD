@@ -1,47 +1,42 @@
-# SystemForge implementation checkpoint
+# playHLD implementation checkpoint
 
-Updated: 2026-11-01. This is a handoff of decisions, implementation state, and verification for another AI or engineer. It is not a transcript of private reasoning.
+Updated: 2026-11-02. This is a handoff of implementation state, decisions, and verification for another AI or engineer.
 
-## Follow-up in progress: separate processing capacity from admission limit
+## Product and repository
 
-The user observed that increasing "Concurrent requests" lowered the displayed load. In v2, that field actually sized parallel processing slots and the load denominator, so its label implied the wrong operation. The correction is to introduce architecture v3 with `processingSlots` (provisioned parallel capacity, budgeted) and `maxInFlight` (admission cap, including processing and waiting). The engine's processing utilization must divide busy processing time by `processingSlots`; raising `maxInFlight` alone must not change capacity. Migrate saved v1/v2 browser graphs; update schemas, published challenge data and version, frontend controls, UI labels, tests, docs, and WASM. At this checkpoint the v3 correction has not yet been applied.
+- Product name: **playHLD**. The page title, accessible logo name, sign-in dialog, landing footer, API title, schema IDs and titles, backend log, exported graph filename, README, and implementation plan use the new name.
+- Go module path: `playhld`. Frontend package: `playhld-frontend`. The Go WebAssembly bridge now registers `playHLD*` functions, and the browser worker calls those names.
+- The implementation plan is `PLAYHLD_IMPLEMENTATION_PLAN.md`. The original specification was supplied separately as a document. The workspace directory retains its existing path; the project name inside the repository is playHLD.
+- New browser storage uses `playhld:` keys. The app reads older draft and layout keys, converts the data, and saves it under the new keys. Old practice drafts for the same published problem version are also read. Old keys are left in place as fallback data.
 
-## User request
+## Architecture and simulation
 
-Each diagram node should represent one actual component instance. Remove hidden replica counts. Users scale out by placing and connecting individual components, including load balancers and API services. Apply this consistently across the editor and problems, add useful component types, provide an optional solution for each problem, and preserve continuous live simulation, resource limits, and the compact editor.
-
-## Implemented
-
-- Architecture schema version 2 replaces `replicas` and `concurrencyPerReplica` with one `concurrency` value per visible node. The workload schema remains version 1. The Go engine calculates capacity from that node alone. V2 graphs containing hidden replica fields are rejected.
-- Nine component kinds are available: Clients/source, load balancer, API service, worker, cache, CDN, database, object storage, and message queue. The fixed Clients node is not in the add menu. Load balancers distribute to explicitly connected targets. Queues can dispatch across multiple explicitly connected workers. CDN and cache have hit/miss routing; database and object storage have read/write service times.
-- Dev's starter architecture visibly draws two API services behind a load balancer. Problem starters remain Clients plus one API service, with no route; the user builds the design.
-- All five published problems use v2 budgets based on visible component count, total processing slots (sum of per-node concurrency), per-kind limits, and per-node concurrency. Each has one curated solution with an explanation. The Solution tab offers a persistent `Load example` action, and loading the graph is undoable.
-- The frontend editor, inspector, health displays, component palette, resource UI, and problem view use the new model. The inspector describes concurrency as local to one instance. Old v1 browser drafts and imported graphs are converted into visible nodes and routing; old v1 schemas and fixture remain archived for reference.
-- API catalog and OpenAPI simulation schema point to v2. README, modeling semantics, decisions, and implementation-status docs are updated. The WASM simulator was rebuilt.
-
-## Model boundaries
-
-This is a synthetic request-path simulator, not a deployable infrastructure description or a measurement of a production system. The queue models buffering and dispatch, but not durable acknowledgements or retries. Cache coherence, data replication, health checks, and failures are not simulated. Separate database nodes do not silently share data. Animated dots sample traversals at high traffic rates. See `docs/modeling-semantics.md` for the full behavior, including live update and restart rules.
+- Architecture schema version 3 gives every diagram node one visible component instance. It separates `processingSlots` (provisioned parallel processing capacity) from `maxInFlight` (admitted processing plus waiting requests). The latter cannot increase processing throughput by itself. `processingUtilization` is occupied processing-slot time divided by provisioned slot time; the UI calls it “Processing busy” and says it is a synthetic measure, not measured CPU usage.
+- Problem budgets charge component instances and processing slots. All five published problem solutions are simulated in Go tests and meet their success, P95, and P99 goals. Problem starters are Clients plus one API service with no route. Dev's starter includes two visible API services behind a load balancer.
+- Component kinds: Clients/source, load balancer, API service, worker, cache, CDN, database, object storage, and message queue. Balancers route to explicitly connected targets; queues dispatch among explicit consumers. The Solution tab offers one optional, loadable worked design per problem.
+- Browser imports and old local drafts with architecture versions 1 and 2 migrate to version 3. Old hidden replicas become visible instances and routing nodes. Native API simulation expects version 3. Historical v1/v2 schemas remain as references.
+- Live simulation continues until paused or stopped and accepts valid graph changes. Dots sample request routes. See `docs/modeling-semantics.md` for the exact behavior and model limits.
 
 ## Verification
 
-- `go test ./...` passed after the queue fan-out change. The challenge test simulates all five published solutions and checks their goals; a separate queue test confirms that both worker branches receive jobs.
-- `npm test` passed two frontend migration tests: v1 replicas become visible instances, and v2 hidden replica fields are rejected.
-- `npm run build` passed again after the final Solution footer UI adjustment, including TypeScript compilation, the Go WASM rebuild, and the Vite production bundle.
-- Browser QA on the local Vite app verified: starter is two nodes with no edges; loading the capacity solution gives four nodes and three edges; all three goals pass through the browser WASM; live Run and Stop work; new component kinds are present; 390px viewport has no horizontal overflow; an old v1 local draft migrates; no JavaScript errors. Queue solution QA verified six visible nodes, two worker nodes, six routes, three passing goals, no mobile overflow or JS errors. The Solution action stays visible at mobile pane height.
+- `go test ./...` passed after the playHLD module rename. Engine tests include an overloaded case proving that increasing only `maxInFlight` does not add processing capacity. All five curated solutions pass their goals.
+- `npm test` passed four frontend migration tests. `npm run build` passed, including Go WASM rebuild, TypeScript compilation, and Vite production output.
+- Headless Chrome on the local app confirmed title `playHLD`, landing logo alt text, sign-in heading, Run/Pause/Stop controls, and a worked problem with three passing goals and no JavaScript errors.
+- A browser check loaded an old local Dev draft and workspace layout, then saved the new keys with the same graph and rail width. Another check loaded an old problem draft on a 390 px viewport, preserved its route, and found no page overflow.
+- Before the product rename, live browser QA of the capacity correction showed an API at 50% busy before and after raising its in-flight limit from 20 to 220. Provisioning 40 rather than 20 processing slots changed busy to 25%. The capacity problem's worked solution passed all three goals.
 
 ## Local services
 
-- Frontend Vite server: `http://127.0.0.1:5173/` (running at handoff).
-- Go backend: `http://127.0.0.1:8080/` (running with `DATABASE_URL` empty, so account persistence is unavailable). Problems, catalog, and local simulation do not need a database. If either process has stopped, see `README.md` for start commands.
-- This workspace does not currently have a `.git` directory; `git status` is unavailable.
+- Frontend: `http://127.0.0.1:5173/`.
+- Go API: `http://127.0.0.1:8080/`. It was started with an empty `DATABASE_URL`, so account persistence requires a configured PostgreSQL database. Problem browsing and browser simulation work without one.
+- The workspace currently has no `.git` directory, so `git status` is unavailable.
 
-## References used for modeling decisions
+## Model boundaries
 
-- AWS Application Load Balancer target groups: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html
-- AWS SQS queue types and worker consumption: https://docs.aws.amazon.com/en_en/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-queue-types.html
-- Cloudflare CDN cache hit/miss and origin behavior: https://developers.cloudflare.com/cache/get-started/
+This is a synthetic request-path simulator. Its numbers are model estimates, not measurements of deployed systems. The queue omits durable acknowledgements and retries; cache coherence, data replication, health checks, and failures are not simulated. Separate database nodes do not silently share data. Animated dots sample traffic at high rates.
 
-## Remaining work / next action
+## References used for component behavior
 
-No required work remains for this request. Later extensions could add richer distributed-system semantics (durability, retry, replication, failure, consistency), but those are not implemented or promised by the present simulator.
+- AWS load balancer target groups: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html
+- AWS SQS queue types and consumers: https://docs.aws.amazon.com/en_en/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-queue-types.html
+- Cloudflare CDN caching: https://developers.cloudflare.com/cache/get-started/

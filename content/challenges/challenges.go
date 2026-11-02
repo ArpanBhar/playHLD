@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sort"
 
-	"systemforge/simulation/goals"
-	"systemforge/simulation/model"
+	"playhld/simulation/goals"
+	"playhld/simulation/model"
 )
 
 //go:embed *.json
