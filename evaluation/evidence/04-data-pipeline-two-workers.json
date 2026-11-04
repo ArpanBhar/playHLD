@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 3,
+  "nodes": [
+    {
+      "id": "client",
+      "kind": "source",
+      "label": "Clients",
+      "position": {
+        "x": 0,
+        "y": 190
+      },
+      "config": {
+        "meanServiceTimeUs": 0,
+        "queueLimit": 0
+      }
+    },
+    {
+      "id": "load_balancer-fac53dbb",
+      "kind": "load_balancer",
+      "label": "Ingest LB",
+      "position": {
+        "x": 230,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 300,
+        "queueLimit": 100,
+        "routingPolicy": "round_robin"
+      }
+    },
+    {
+      "id": "api-afa04175",
+      "kind": "api",
+      "label": "Ingest API",
+      "position": {
+        "x": 460,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 20000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "message_queue-544cbf9b",
+      "kind": "message_queue",
+      "label": "Event queue",
+      "position": {
+        "x": 690,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 1000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "worker-9f940fb3",
+      "kind": "worker",
+      "label": "Batch worker",
+      "position": {
+        "x": 920,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 10000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "object_storage-45c3fafd",
+      "kind": "object_storage",
+      "label": "Data lake",
+      "position": {
+        "x": 1150,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 5000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "worker-cc974829",
+      "kind": "worker",
+      "label": "Second batch worker",
+      "position": {
+        "x": 1380,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 10000,
+        "queueLimit": 100
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-17fe07a9",
+      "source": "client",
+      "target": "load_balancer-fac53dbb",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-7bde3f66",
+      "source": "load_balancer-fac53dbb",
+      "target": "api-afa04175",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-387999ad",
+      "source": "api-afa04175",
+      "target": "message_queue-544cbf9b",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-fd8c9441",
+      "source": "message_queue-544cbf9b",
+      "target": "worker-9f940fb3",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-13577c82",
+      "source": "worker-9f940fb3",
+      "target": "object_storage-45c3fafd",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-6a533ea4",
+      "source": "message_queue-544cbf9b",
+      "target": "worker-cc974829",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-11ebbbc5",
+      "source": "worker-cc974829",
+      "target": "object_storage-45c3fafd",
+      "route": "always",
+      "delayUs": 0
+    }
+  ]
+}

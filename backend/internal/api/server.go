@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"playhld/backend/internal/storage"
 	"playhld/simulation/engine"
 	"playhld/simulation/model"
 )
@@ -40,7 +40,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 type Options struct {
-	DB                     *pgxpool.Pool
+	DB                     *storage.DB
 	SecureCookies          bool
 	EnableNativeSimulation bool
 }

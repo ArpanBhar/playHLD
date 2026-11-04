@@ -22,7 +22,7 @@ Required exclusions: real cloud provisioning, real production load testing, vend
 
 ## 2. Recommended architecture and stack
 
-Retain the source stack: React, TypeScript, React Flow, Go, WebAssembly, and PostgreSQL. The following supporting choices are proposed defaults, not extra product requirements.
+Retain the source stack: React, TypeScript, React Flow, Go, and WebAssembly. Use embedded SQLite for the self-contained prototype in place of PostgreSQL. The following supporting choices are proposed defaults, not extra product requirements.
 
 | Area | Decision | Purpose |
 | --- | --- | --- |
@@ -35,10 +35,10 @@ Retain the source stack: React, TypeScript, React Flow, Go, WebAssembly, and Pos
 | Charts | Recharts initially | Aggregated time series, comparisons, tooltips |
 | Contracts | Versioned JSON Schema plus OpenAPI | Shared payload definitions and generated TypeScript API types |
 | Backend | Go modular monolith, `net/http` routing | HTTP API, identity, persistence, collaboration, evaluation jobs |
-| Database access | `pgx` with parameterized SQL and versioned migrations | Explicit transactions and predictable queries |
+| Database access | `database/sql` with `modernc.org/sqlite`, parameterized SQL, and versioned migrations | Embedded persistence, explicit transactions, and predictable queries |
 | WebSockets | One maintained Go WebSocket library selected and pinned in bootstrap | Authenticated project editing and presence |
 | Tests | Go tests/fuzzing, Vitest, React Testing Library, Playwright | Engine, integration, frontend, multi-browser workflows |
-| Delivery | Docker multi-stage image and Compose for local Go/Postgres | Reproducible development and deployment |
+| Delivery | Docker multi-stage image with a mounted SQLite data volume | Reproducible development and deployment |
 
 Pin compatible supported versions during bootstrap in lockfiles, `go.mod`, a toolchain manifest, and container images. Check package compatibility then; this plan deliberately does not invent exact version pins. Vite provides a React-capable development/build foundation; consult its current runtime prerequisites before scaffolding. [Vite documentation](https://vite.dev/guide/)
 
@@ -50,12 +50,12 @@ flowchart LR
     W -->|bounded snapshot batches| UI
     UI -->|REST and session cookie| API[Go modular monolith]
     UI <-->|WebSocket operations and revisions| API
-    API --> DB[(PostgreSQL)]
+    API --> DB[(SQLite)]
     API --> J[Bounded native evaluation pool]
     J --> E
 ```
 
-Production starts with one Go application process and one PostgreSQL database. The Go server can serve the built frontend under the same origin as `/api`, eliminating unnecessary cross-origin session complexity. A reverse proxy/load balancer may terminate TLS. No Redis, Kafka, Kubernetes, or separate simulation service is needed for the prototype.
+Production starts with one Go application process and one SQLite database file. The Go server can serve the built frontend under the same origin as `/api`, eliminating unnecessary cross-origin session complexity. A reverse proxy/load balancer may terminate TLS. No Redis, Kafka, Kubernetes, or separate simulation service is needed for the prototype. A future multi-instance deployment would require revisiting this storage choice.
 
 ### Repository layout
 
@@ -220,7 +220,7 @@ Accessibility acceptance: named controls and ports, visible focus, keyboard add/
 
 ## 6. Simulation engine implementation
 
-The simulation package must not import HTTP, PostgreSQL, browser bindings, or wall-clock APIs. Use a single-threaded deterministic event loop. Adapter-level deadlines may cancel work; elapsed wall time must not change a successfully completed simulation's calculated outcome.
+The simulation package must not import HTTP, SQLite, browser bindings, or wall-clock APIs. Use a single-threaded deterministic event loop. Adapter-level deadlines may cancel work; elapsed wall time must not change a successfully completed simulation's calculated outcome.
 
 Implement the source contracts in groups:
 
@@ -344,9 +344,9 @@ Document every payload/status in OpenAPI before UI integration. Require an idemp
 
 Existing `/api/designs` supports standalone personal saved graphs. Dev projects use branches/versions. Share graph validation and serialization but do not maintain two authoritative copies of the same Dev draft.
 
-## 9. PostgreSQL model and transactional rules
+## 9. SQLite model and transactional rules
 
-Use UUID identifiers, `timestamptz` for wall-clock metadata, `bigint` for revision counters, JSONB for versioned graph/workload/result payloads, and explicit foreign keys/check constraints. Keep frequently filtered fields as columns rather than scanning JSON. Application times are UTC; display contest dates in the viewer's timezone alongside the authoritative deadline.
+Use UUID identifiers stored as text, UTC `DATETIME` values for wall-clock metadata, integer revision counters, validated JSON text for versioned graph/workload/result payloads, and explicit foreign keys/check constraints. Keep frequently filtered fields as columns rather than scanning JSON. Application times are UTC; display contest dates in the viewer's timezone alongside the authoritative deadline.
 
 | Tables | Key fields and invariants |
 | --- | --- |
@@ -371,11 +371,11 @@ Use UUID identifiers, `timestamptz` for wall-clock metadata, `bigint` for revisi
 
 Indexes: owner/updated time for designs; workspace/project lookups; project/created time for versions/runs; user/challenge/time for attempts; branch/revision for operations; contest/user/accepted time for submissions; status/available time for jobs; contest score/tie-break fields for ranking. Add unique constraints to prevent duplicate evaluations for the same immutable input and pinned evaluation version.
 
-Design updates use conditional `UPDATE ... WHERE version = expectedVersion`. Branch operations, revision assignment, draft update, and operation persistence occur in one transaction locking the branch row. Version creation captures an exact branch revision in a transaction. Row locks provide the necessary serialization; keep lock duration short and use a consistent locking order. [PostgreSQL locking documentation](https://www.postgresql.org/docs/current/explicit-locking.html)
+Design updates use conditional `UPDATE ... WHERE version = expectedVersion`. Branch operations, revision assignment, draft update, and operation persistence occur in one short transaction. Version creation captures an exact branch revision in that transaction. SQLite serializes writes; optimistic revision checks prevent stale updates, and the application uses a single connection for predictable transaction boundaries.
 
 Durable jobs use short claiming transactions, lease ownership, retry counts, and abandoned-lease recovery. Simulate outside the database transaction. Commit results and job completion atomically. A unique result key makes crash/retry behavior idempotent. Do not execute a native simulation while holding a branch/contest row lock.
 
-P0 snapshots can be bounded JSONB payloads in a separate table. Define per-user storage quotas and a visible retention policy before launch; summary pages must not fetch all time-series payloads. Object storage is a later measured optimization. Back up PostgreSQL and test restoring all branch/version relationships.
+P0 snapshots can be bounded validated JSON payloads in a separate table. Define per-user storage quotas and a visible retention policy before launch; summary pages must not fetch all time-series payloads. Object storage is a later measured optimization. Back up the SQLite database and test restoring all branch/version relationships.
 
 ## 10. Identity, authorization, and data safety
 
@@ -487,7 +487,7 @@ The implementation agent should execute one milestone at a time and leave a work
 
 | Milestone | Dependencies | Deliverables | Exit evidence |
 | --- | --- | --- | --- |
-| M00 Bootstrap and contracts | None | Repository, toolchain pins, schema fixtures, OpenAPI skeleton, decision log, scripts, local Postgres, CI skeleton | Clean install/build; valid/invalid schema fixtures pass; no dependency direction violation |
+| M00 Bootstrap and contracts | None | Repository, toolchain pins, schema fixtures, OpenAPI skeleton, decision log, scripts, local SQLite, CI skeleton | Clean install/build; valid/invalid schema fixtures pass; no dependency direction violation |
 | M01 Shared editor | M00 | Mode shell, palette, custom nodes/edges, inspector, commands, undo/redo, structural validation, JSON import/export | Create five nodes; configure/connect; undo/redo; export/import preserves positions and config; keyboard workflow passes |
 | M02 Minimal native engine | M00 | Source/API, heap/FIFO/resources, fixed arrivals/constant service, summaries, limits | Hand-calculated fixtures, overload, determinism, cancellation and accounting tests pass |
 | M03 Complete P0 component models | M02 | LB/cache/database/queue/edge delay, classes/routing, PCG/exponential/Poisson, versioned catalog/cost assumptions | URL-shortener and queue fixtures pass; impossible/missing routes rejected; stochastic goldens stable |
@@ -520,7 +520,7 @@ M02 may be developed before polishing M01, but M04 must prove real engine-to-bro
 
 ### Backend integration and security tests
 
-Run against real disposable PostgreSQL with applied migrations. Cover cross-user access, nested-resource scope, CSRF/session expiry, role changes, invitation replay, optimistic concurrency, duplicate operation IDs, idempotency key collisions, transactional version snapshots, contest deadline races, job crash/retry, and leaderboard ties. Verify hidden-data serializers through allowlist tests.
+Run against isolated disposable SQLite databases with applied migrations. Cover cross-user access, nested-resource scope, CSRF/session expiry, role changes, invitation replay, optimistic concurrency, duplicate operation IDs, idempotency key collisions, transactional version snapshots, contest deadline races, job crash/retry, and leaderboard ties. Verify hidden-data serializers through allowlist tests.
 
 ### Browser workflows
 
@@ -536,9 +536,9 @@ Benchmark peak WASM memory, native RSS, startup, encoding size, snapshot count, 
 
 Create documented cross-platform commands for `dev`, `build`, `build:wasm`, `generate`, `lint`, `typecheck`, `test:unit`, `test:integration`, `test:parity`, `test:e2e`, `db:migrate`, and `db:seed`. Prefer small Node/Go scripts over shell-specific chains so the Windows workspace works. A clean checkout must build without copying an opaque WASM binary from another machine.
 
-CI order: lockfile install → schema/OpenAPI generation drift check → lint/typecheck → Go unit/fuzz seeds → native build → WASM build → frontend tests/build → PostgreSQL migration/integration tests → real-browser parity and critical E2E → container build. Run Go race tests on backend concurrent code in a supported runner. Keep expensive benchmarks in a dedicated repeatable job, and publish evidence rather than silently changing limits.
+CI order: lockfile install → schema/OpenAPI generation drift check → lint/typecheck → Go unit/fuzz seeds → native build → WASM build → frontend tests/build → SQLite migration/integration tests → real-browser parity and critical E2E → container build. Run Go race tests on backend concurrent code in a supported runner. Keep expensive benchmarks in a dedicated repeatable job, and publish evidence rather than silently changing limits.
 
-Container build produces versioned native binary, static frontend, matching WASM/runtime glue, and a build manifest. Run as a non-root user with resource limits. Environment settings include database URL, public origin, session policy, allowed WebSocket origins, evaluation pool/deadline/limits, retention/quota values, log level, and feature flags. Browser environment values must contain no secrets.
+Container build produces versioned native binary, static frontend, matching WASM/runtime glue, and a build manifest. Run as a non-root user with resource limits. Environment settings include database path, public origin, session policy, allowed WebSocket origins, evaluation pool/deadline/limits, retention/quota values, log level, and feature flags. Browser environment values must contain no secrets.
 
 Serve hashed assets immutably; serve the entry HTML/asset manifest with suitable revalidation so a release cannot mix incompatible WASM/runtime files. Configure CSP and worker/WASM permissions according to actual browser tests. Support WebSocket upgrade/timeouts through the TLS proxy. Keep database connections bounded separately from simulation concurrency.
 
@@ -580,7 +580,7 @@ Work in milestone order M00–M13. Deliver the complete P0 prototype through M09
 then Contest and professional Dev through M13, unless the user narrows the scope.
 Do not stop at a mock frontend or simulated API responses. Use one React editor,
 one versioned graph model, one Go engine for WASM/native, one Go modular monolith,
-and PostgreSQL. Do not introduce microservices, arbitrary executable plugins,
+and SQLite. Do not introduce microservices, arbitrary executable plugins,
 production provisioning, or CRDT/offline merging into the prototype.
 
 Before each milestone, list its exact files/contracts and acceptance tests.

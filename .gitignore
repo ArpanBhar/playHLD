@@ -11,4 +11,7 @@ frontend/src/simulation/wasm_exec.js
 coverage/
 test-results/
 playwright-report/
+*.db
+*.db-shm
+*.db-wal
 

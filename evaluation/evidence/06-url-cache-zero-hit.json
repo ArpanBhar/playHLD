@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 3,
+  "nodes": [
+    {
+      "id": "client",
+      "kind": "source",
+      "label": "Clients",
+      "position": {
+        "x": 0,
+        "y": 190
+      },
+      "config": {
+        "meanServiceTimeUs": 0,
+        "queueLimit": 0
+      }
+    },
+    {
+      "id": "cdn-83316781",
+      "kind": "cdn",
+      "label": "Redirect CDN",
+      "position": {
+        "x": 230,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 300,
+        "queueLimit": 100,
+        "hitRate": 0
+      }
+    },
+    {
+      "id": "load_balancer-00f4deff",
+      "kind": "load_balancer",
+      "label": "Redirect LB",
+      "position": {
+        "x": 460,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 300,
+        "queueLimit": 100,
+        "routingPolicy": "round_robin"
+      }
+    },
+    {
+      "id": "api-31a4521a",
+      "kind": "api",
+      "label": "Redirect API",
+      "position": {
+        "x": 690,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 20000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "cache-5743b286",
+      "kind": "cache",
+      "label": "URL cache",
+      "position": {
+        "x": 920,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 500,
+        "queueLimit": 100,
+        "hitRate": 0
+      }
+    },
+    {
+      "id": "database-807324d4",
+      "kind": "database",
+      "label": "Mapping DB",
+      "position": {
+        "x": 1150,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 50000,
+        "queueLimit": 100
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-26a369e8",
+      "source": "cdn-83316781",
+      "target": "load_balancer-00f4deff",
+      "route": "cache_miss",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-19a511e4",
+      "source": "load_balancer-00f4deff",
+      "target": "api-31a4521a",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-a7025baa",
+      "source": "api-31a4521a",
+      "target": "cache-5743b286",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-a1ef22e6",
+      "source": "client",
+      "target": "cdn-83316781",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-b41c0b7a",
+      "source": "cache-5743b286",
+      "target": "database-807324d4",
+      "route": "cache_miss",
+      "delayUs": 0
+    }
+  ]
+}

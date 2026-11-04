@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -10,8 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"playhld/backend/internal/storage"
 	"playhld/simulation/model"
 )
 
@@ -36,17 +36,17 @@ func validName(name string) bool {
 	return len(strings.TrimSpace(name)) > 0 && len([]rune(strings.TrimSpace(name))) <= 120
 }
 
-func workspaceRole(ctx context.Context, db *pgxpool.Pool, userID, workspaceID string) (string, error) {
+func workspaceRole(ctx context.Context, db *storage.DB, userID, workspaceID string) (string, error) {
 	var role string
 	err := db.QueryRow(ctx, `SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2 AND status='active'`, workspaceID, userID).Scan(&role)
 	return role, err
 }
-func projectRole(ctx context.Context, db *pgxpool.Pool, userID, projectID string) (string, error) {
+func projectRole(ctx context.Context, db *storage.DB, userID, projectID string) (string, error) {
 	var role string
 	err := db.QueryRow(ctx, `SELECT m.role FROM projects p JOIN workspace_members m ON m.workspace_id=p.workspace_id WHERE p.id=$1 AND m.user_id=$2 AND m.status='active'`, projectID, userID).Scan(&role)
 	return role, err
 }
-func requireProject(w http.ResponseWriter, r *http.Request, db *pgxpool.Pool, userID, projectID string, write bool) bool {
+func requireProject(w http.ResponseWriter, r *http.Request, db *storage.DB, userID, projectID string, write bool) bool {
 	if !uuidPattern.MatchString(projectID) {
 		writeError(w, 404, "NOT_FOUND", "project was not found")
 		return false
@@ -63,7 +63,7 @@ func requireProject(w http.ResponseWriter, r *http.Request, db *pgxpool.Pool, us
 	return true
 }
 
-func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
+func registerProjectRoutes(mux *http.ServeMux, db *storage.DB) {
 	mux.HandleFunc("POST /api/workspaces", func(w http.ResponseWriter, r *http.Request) {
 		if !sameOrigin(r) {
 			writeError(w, 403, "ORIGIN_DENIED", "origin is not allowed")
@@ -89,7 +89,7 @@ func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		}
 		defer tx.Rollback(r.Context())
 		var id string
-		err = tx.QueryRow(r.Context(), `INSERT INTO workspaces(owner_id,name) VALUES($1,$2) RETURNING id::text`, user.ID, input.Name).Scan(&id)
+		err = tx.QueryRow(r.Context(), `INSERT INTO workspaces(owner_id,name) VALUES($1,$2) RETURNING id`, user.ID, input.Name).Scan(&id)
 		if err == nil {
 			_, err = tx.Exec(r.Context(), `INSERT INTO workspace_members(workspace_id,user_id,role) VALUES($1,$2,'owner')`, id, user.ID)
 		}
@@ -108,7 +108,7 @@ func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		if !ok {
 			return
 		}
-		rows, err := db.Query(r.Context(), `SELECT w.id::text,w.name,m.role FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id WHERE m.user_id=$1 AND m.status='active' ORDER BY w.created_at DESC,w.id DESC LIMIT 100`, user.ID)
+		rows, err := db.Query(r.Context(), `SELECT w.id,w.name,m.role FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id WHERE m.user_id=$1 AND m.status='active' ORDER BY w.created_at DESC,w.id DESC LIMIT 100`, user.ID)
 		if err != nil {
 			writeDatabaseError(w)
 			return
@@ -169,9 +169,9 @@ func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		}
 		defer tx.Rollback(r.Context())
 		var projectID, branchID string
-		err = tx.QueryRow(r.Context(), `INSERT INTO projects(workspace_id,name,description) VALUES($1,$2,$3) RETURNING id::text`, input.WorkspaceID, input.Name, input.Description).Scan(&projectID)
+		err = tx.QueryRow(r.Context(), `INSERT INTO projects(workspace_id,name,description) VALUES($1,$2,$3) RETURNING id`, input.WorkspaceID, input.Name, input.Description).Scan(&projectID)
 		if err == nil {
-			err = tx.QueryRow(r.Context(), `INSERT INTO architecture_branches(project_id,name,draft_json) VALUES($1,'main',$2) RETURNING id::text`, projectID, graphJSON).Scan(&branchID)
+			err = tx.QueryRow(r.Context(), `INSERT INTO architecture_branches(project_id,name,draft_json) VALUES($1,'main',$2) RETURNING id`, projectID, graphJSON).Scan(&branchID)
 		}
 		if err != nil {
 			writeDatabaseError(w)
@@ -188,7 +188,7 @@ func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		if !ok {
 			return
 		}
-		rows, err := db.Query(r.Context(), `SELECT p.id::text,p.workspace_id::text,p.name,p.description,p.updated_at,m.role FROM projects p JOIN workspace_members m ON m.workspace_id=p.workspace_id WHERE m.user_id=$1 AND m.status='active' ORDER BY p.updated_at DESC,p.id DESC LIMIT 100`, user.ID)
+		rows, err := db.Query(r.Context(), `SELECT p.id,p.workspace_id,p.name,p.description,p.updated_at,m.role FROM projects p JOIN workspace_members m ON m.workspace_id=p.workspace_id WHERE m.user_id=$1 AND m.status='active' ORDER BY p.updated_at DESC,p.id DESC LIMIT 100`, user.ID)
 		if err != nil {
 			writeDatabaseError(w)
 			return
@@ -222,7 +222,7 @@ func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		var workspaceID, name, description, branchID string
 		var revision int64
 		var graph json.RawMessage
-		err := db.QueryRow(r.Context(), `SELECT p.workspace_id::text,p.name,p.description,b.id::text,b.revision,b.draft_json FROM projects p JOIN architecture_branches b ON b.project_id=p.id AND b.name='main' WHERE p.id=$1`, id).Scan(&workspaceID, &name, &description, &branchID, &revision, &graph)
+		err := db.QueryRow(r.Context(), `SELECT p.workspace_id,p.name,p.description,b.id,b.revision,b.draft_json FROM projects p JOIN architecture_branches b ON b.project_id=p.id AND b.name='main' WHERE p.id=$1`, id).Scan(&workspaceID, &name, &description, &branchID, &revision, &graph)
 		if err != nil {
 			writeDatabaseError(w)
 			return
@@ -258,7 +258,7 @@ func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		graphJSON, _ := json.Marshal(graph)
 		var revision int64
 		err = db.QueryRow(r.Context(), `UPDATE architecture_branches SET draft_json=$1,revision=revision+1 WHERE project_id=$2 AND name='main' AND revision=$3 RETURNING revision`, graphJSON, id, input.ExpectedRevision).Scan(&revision)
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, 409, "REVISION_CONFLICT", "draft changed; reload before saving")
 			return
 		}
@@ -266,7 +266,7 @@ func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 			writeDatabaseError(w)
 			return
 		}
-		_, _ = db.Exec(r.Context(), `UPDATE projects SET updated_at=now() WHERE id=$1`, id)
+		_, _ = db.Exec(r.Context(), `UPDATE projects SET updated_at=CURRENT_TIMESTAMP WHERE id=$1`, id)
 		writeJSON(w, 200, map[string]any{"id": id, "revision": revision, "architecture": graph})
 	})
 	mux.HandleFunc("POST /api/projects/{id}/versions", func(w http.ResponseWriter, r *http.Request) {
@@ -295,7 +295,7 @@ func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		var branchID string
 		var revision int64
 		var graph []byte
-		err = tx.QueryRow(r.Context(), `SELECT id::text,revision,draft_json FROM architecture_branches WHERE project_id=$1 AND name='main' FOR UPDATE`, id).Scan(&branchID, &revision, &graph)
+		err = tx.QueryRow(r.Context(), `SELECT id,revision,draft_json FROM architecture_branches WHERE project_id=$1 AND name='main'`, id).Scan(&branchID, &revision, &graph)
 		if err != nil {
 			writeDatabaseError(w)
 			return
@@ -316,17 +316,17 @@ func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		}
 		var parentID *string
 		var parent string
-		err = tx.QueryRow(r.Context(), `SELECT id::text FROM architecture_versions WHERE branch_id=$1 ORDER BY branch_revision DESC LIMIT 1`, branchID).Scan(&parent)
+		err = tx.QueryRow(r.Context(), `SELECT id FROM architecture_versions WHERE branch_id=$1 ORDER BY branch_revision DESC LIMIT 1`, branchID).Scan(&parent)
 		if err == nil {
 			parentID = &parent
-		} else if !errors.Is(err, pgx.ErrNoRows) {
+		} else if !errors.Is(err, sql.ErrNoRows) {
 			writeDatabaseError(w)
 			return
 		}
 		hash := sha256.Sum256(graph)
 		var versionID string
 		var createdAt time.Time
-		err = tx.QueryRow(r.Context(), `INSERT INTO architecture_versions(project_id,branch_id,parent_id,branch_revision,graph_json,graph_hash,author_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id::text,created_at`, id, branchID, parentID, revision, graph, hex.EncodeToString(hash[:]), user.ID).Scan(&versionID, &createdAt)
+		err = tx.QueryRow(r.Context(), `INSERT INTO architecture_versions(project_id,branch_id,parent_id,branch_revision,graph_json,graph_hash,author_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,created_at`, id, branchID, parentID, revision, graph, hex.EncodeToString(hash[:]), user.ID).Scan(&versionID, &createdAt)
 		if err != nil {
 			writeDatabaseError(w)
 			return
@@ -346,7 +346,7 @@ func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		if !requireProject(w, r, db, user.ID, id, false) {
 			return
 		}
-		rows, err := db.Query(r.Context(), `SELECT id::text,branch_revision,graph_hash,created_at FROM architecture_versions WHERE project_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100`, id)
+		rows, err := db.Query(r.Context(), `SELECT id,branch_revision,graph_hash,created_at FROM architecture_versions WHERE project_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100`, id)
 		if err != nil {
 			writeDatabaseError(w)
 			return
@@ -388,7 +388,7 @@ func registerProjectRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		var hash string
 		var createdAt time.Time
 		err := db.QueryRow(r.Context(), `SELECT branch_revision,graph_json,graph_hash,created_at FROM architecture_versions WHERE project_id=$1 AND id=$2`, id, versionID).Scan(&revision, &graph, &hash, &createdAt)
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, 404, "NOT_FOUND", "version was not found")
 			return
 		}

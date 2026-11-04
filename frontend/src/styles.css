@@ -153,8 +153,8 @@ h2,h3,p{margin-top:0}
 .metrics-heading h2{font-size:12px}.metrics-actions{gap:7px}.metrics-actions .secondary-button{height:24px;font-size:10px}.status-label{font-size:10px}
 .metrics-actions .capture-button{white-space:nowrap}
 .metric-grid{gap:8px}.metric{min-height:50px;padding:6px 9px;grid-template-rows:15px 1fr}.metric>span{font-size:10px}.metric strong{font-size:17px}.metric small{font-size:9px}
-.chart-and-note{min-height:70px;grid-template-columns:minmax(0,1fr) 135px;gap:9px}.chart-legend{font-size:10px;gap:4px}.chart-legend p{font-size:9px}
-.playback-bar{min-height:25px}.flow-caption{color:#8592a5;font-size:9px;white-space:nowrap}
+.chart-and-note{min-height:96px;flex:1 0 96px;grid-template-columns:minmax(0,1fr) 135px;gap:9px}.chart-wrap{min-height:0;overflow:hidden}.chart-svg{overflow:hidden}.chart-legend{font-size:10px;gap:4px}.chart-legend p{font-size:9px}
+.playback-bar{flex:none;min-height:25px}.flow-caption{color:#8592a5;font-size:9px;white-space:nowrap}
 .metrics-panel.is-collapsed{padding:4px 10px;overflow:hidden}.metrics-panel.is-collapsed .metrics-heading{height:26px}
 .panel-resizer{position:absolute;z-index:5;touch-action:none}.panel-resizer:hover,.panel-resizer:active{background:#1767ed55}
 .mobile-resizer{display:none}

@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 3,
+  "nodes": [
+    {
+      "id": "client",
+      "kind": "source",
+      "label": "Clients",
+      "position": {
+        "x": 0,
+        "y": 190
+      },
+      "config": {
+        "meanServiceTimeUs": 0,
+        "queueLimit": 0
+      }
+    },
+    {
+      "id": "cdn-face2513",
+      "kind": "cdn",
+      "label": "Dashboard CDN",
+      "position": {
+        "x": 230,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 300,
+        "queueLimit": 100,
+        "hitRate": 0.8
+      }
+    },
+    {
+      "id": "load_balancer-b88d7677",
+      "kind": "load_balancer",
+      "label": "Hybrid LB",
+      "position": {
+        "x": 460,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 300,
+        "queueLimit": 100,
+        "routingPolicy": "round_robin"
+      }
+    },
+    {
+      "id": "api-8bcae930",
+      "kind": "api",
+      "label": "Telemetry API",
+      "position": {
+        "x": 690,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 20000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "message_queue-314b882f",
+      "kind": "message_queue",
+      "label": "Telemetry queue",
+      "position": {
+        "x": 920,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 1000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "worker-beaafc6e",
+      "kind": "worker",
+      "label": "Aggregator",
+      "position": {
+        "x": 1150,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 10000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "database-21dec7cf",
+      "kind": "database",
+      "label": "Analytics DB",
+      "position": {
+        "x": 1380,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 5000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "api-6df15e52",
+      "kind": "api",
+      "label": "Dashboard API",
+      "position": {
+        "x": 887.9334038054967,
+        "y": 424.01691331923894
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 20000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "cache-73fdf84a",
+      "kind": "cache",
+      "label": "Dashboard cache",
+      "position": {
+        "x": 1277.869978858351,
+        "y": 424.01691331923894
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 500,
+        "queueLimit": 100,
+        "hitRate": 0.8
+      }
+    },
+    {
+      "id": "object_storage-4534e316",
+      "kind": "object_storage",
+      "label": "Report archive",
+      "position": {
+        "x": 1670.1585623678648,
+        "y": 424.01691331923894
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 5000,
+        "queueLimit": 100
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-95c7a7b5",
+      "source": "client",
+      "target": "cdn-face2513",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-91bd99c4",
+      "source": "cdn-face2513",
+      "target": "load_balancer-b88d7677",
+      "route": "cache_miss",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-dc8febb6",
+      "source": "load_balancer-b88d7677",
+      "target": "api-8bcae930",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-a95418eb",
+      "source": "api-8bcae930",
+      "target": "message_queue-314b882f",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-9e6c5f01",
+      "source": "message_queue-314b882f",
+      "target": "worker-beaafc6e",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-c089828a",
+      "source": "worker-beaafc6e",
+      "target": "database-21dec7cf",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-f20d12ec",
+      "source": "load_balancer-b88d7677",
+      "target": "api-6df15e52",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-3119d31a",
+      "source": "api-6df15e52",
+      "target": "cache-73fdf84a",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-fb7c0bf3",
+      "source": "cache-73fdf84a",
+      "target": "object_storage-4534e316",
+      "route": "cache_miss",
+      "delayUs": 0
+    }
+  ]
+}

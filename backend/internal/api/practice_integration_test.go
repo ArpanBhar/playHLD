@@ -7,28 +7,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
-	"playhld/backend/internal/storage"
 	"playhld/content/challenges"
 	"playhld/simulation/model"
 )
 
 func TestPracticeAttemptIsServerVerifiedAndPrivate(t *testing.T) {
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("set TEST_DATABASE_URL for PostgreSQL integration")
-	}
-	db, err := storage.Open(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	if err := storage.Migrate(context.Background(), db); err != nil {
-		t.Fatal(err)
-	}
+	db := testDatabase(t)
 	server := NewServerWithOptions(Options{DB: db})
 	call := func(method, path string, body any, cookies []*http.Cookie, csrf string) *httptest.ResponseRecorder {
 		var data []byte

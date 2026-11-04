@@ -2,17 +2,13 @@ package storage
 
 import (
 	"context"
-	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestMigrationsApplyAndRepeat(t *testing.T) {
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("set TEST_DATABASE_URL for PostgreSQL integration")
-	}
 	ctx := context.Background()
-	pool, err := Open(ctx, url)
+	pool, err := Open(ctx, filepath.Join(t.TempDir(), "migration-test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +20,7 @@ func TestMigrationsApplyAndRepeat(t *testing.T) {
 		t.Fatalf("repeat migration failed: %v", err)
 	}
 	var exists bool
-	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='architecture_branches')`).Scan(&exists); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='architecture_branches')`).Scan(&exists); err != nil {
 		t.Fatal(err)
 	}
 	if !exists {

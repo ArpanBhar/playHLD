@@ -7,27 +7,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
-	"playhld/backend/internal/storage"
 	"playhld/content/challenges"
+	"playhld/simulation/model"
 )
 
 func TestProjectDraftAndImmutableVersions(t *testing.T) {
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("set TEST_DATABASE_URL for PostgreSQL integration")
-	}
-	db, err := storage.Open(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	if err := storage.Migrate(context.Background(), db); err != nil {
-		t.Fatal(err)
-	}
+	db := testDatabase(t)
 	server := NewServerWithOptions(Options{DB: db})
 	call := func(method, path string, body any, cookies []*http.Cookie, csrf string) *httptest.ResponseRecorder {
 		var data []byte
@@ -104,6 +92,7 @@ func TestProjectDraftAndImmutableVersions(t *testing.T) {
 	}
 	graph := challenge.Starter
 	graph.Nodes[1].Config.ProcessingSlots = 2
+	graph.Edges = append(graph.Edges, model.Edge{ID: "direct", Source: "source", Target: "api", Route: "always"})
 	update := call("PUT", "/api/projects/"+created.ID+"/draft", map[string]any{"architecture": graph, "expectedRevision": 0}, alice, aliceCSRF)
 	if update.Code != 200 {
 		t.Fatalf("draft update: %d %s", update.Code, update.Body.String())

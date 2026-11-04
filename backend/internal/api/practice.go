@@ -2,13 +2,13 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"playhld/backend/internal/storage"
 	"playhld/content/challenges"
 	"playhld/simulation/engine"
 	"playhld/simulation/goals"
@@ -42,7 +42,7 @@ func registerChallengeRoutes(mux *http.ServeMux) {
 	})
 }
 
-func registerPracticeAttemptRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
+func registerPracticeAttemptRoutes(mux *http.ServeMux, db *storage.DB) {
 	mux.HandleFunc("GET /api/practice/progress/{id}", func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireActor(w, r, db, false)
 		if !ok {
@@ -66,8 +66,8 @@ func registerPracticeAttemptRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		var resultData []byte
 		var version int
 		var createdAt time.Time
-		err = db.QueryRow(r.Context(), `SELECT id::text,challenge_version,result_json,created_at FROM practice_attempts WHERE user_id=$1 AND challenge_id=$2 ORDER BY created_at DESC,id DESC LIMIT 1`, user.ID, challenge.ID).Scan(&id, &version, &resultData, &createdAt)
-		if errors.Is(err, pgx.ErrNoRows) {
+		err = db.QueryRow(r.Context(), `SELECT id,challenge_version,result_json,created_at FROM practice_attempts WHERE user_id=$1 AND challenge_id=$2 ORDER BY created_at DESC,id DESC LIMIT 1`, user.ID, challenge.ID).Scan(&id, &version, &resultData, &createdAt)
+		if errors.Is(err, sql.ErrNoRows) {
 			writeJSON(w, 200, map[string]any{"challengeId": challenge.ID, "attemptCount": 0, "latest": nil})
 			return
 		}
@@ -166,13 +166,13 @@ func registerPracticeAttemptRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 			return
 		}
 		defer tx.Rollback(ctx)
-		_, err = tx.Exec(ctx, `INSERT INTO challenges(id,version,content_json,published_at) VALUES($1,$2,$3,now()) ON CONFLICT(id,version) DO NOTHING`, challenge.ID, challenge.Version, challengeJSON)
+		_, err = tx.Exec(ctx, `INSERT INTO challenges(id,version,content_json,published_at) VALUES($1,$2,$3,CURRENT_TIMESTAMP) ON CONFLICT(id,version) DO NOTHING`, challenge.ID, challenge.Version, challengeJSON)
 		if err != nil {
 			writeDatabaseError(w)
 			return
 		}
 		var id string
-		err = tx.QueryRow(ctx, `INSERT INTO practice_attempts(user_id,challenge_id,challenge_version,architecture_json,result_json,engine_version,provenance) VALUES($1,$2,$3,$4,$5,$6,'server_native') RETURNING id::text`, user.ID, challenge.ID, challenge.Version, graphJSON, resultJSON, engine.EngineVersion).Scan(&id)
+		err = tx.QueryRow(ctx, `INSERT INTO practice_attempts(user_id,challenge_id,challenge_version,architecture_json,result_json,engine_version,provenance) VALUES($1,$2,$3,$4,$5,$6,'server_native') RETURNING id`, user.ID, challenge.ID, challenge.Version, graphJSON, resultJSON, engine.EngineVersion).Scan(&id)
 		if err != nil {
 			writeDatabaseError(w)
 			return
@@ -188,7 +188,7 @@ func registerPracticeAttemptRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		if !ok {
 			return
 		}
-		rows, err := db.Query(r.Context(), `SELECT id::text,challenge_id,challenge_version,engine_version,created_at,result_json FROM practice_attempts WHERE user_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100`, user.ID)
+		rows, err := db.Query(r.Context(), `SELECT id,challenge_id,challenge_version,engine_version,created_at,result_json FROM practice_attempts WHERE user_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100`, user.ID)
 		if err != nil {
 			writeDatabaseError(w)
 			return

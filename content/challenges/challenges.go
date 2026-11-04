@@ -45,6 +45,8 @@ type ComponentSpec struct {
 	MeanServiceTimeUs int64   `json:"meanServiceTimeUs"`
 	QueueLimit        int     `json:"queueLimit"`
 	HitRate           float64 `json:"hitRate,omitempty"`
+	CacheCapacity     int     `json:"cacheCapacity,omitempty"`
+	CacheTTLUs        int64   `json:"cacheTtlUs,omitempty"`
 }
 
 // ValidateGraph applies the published resource and component rules to every attempt.
@@ -81,7 +83,7 @@ func ValidateGraph(challenge Challenge, graph model.Architecture) error {
 		if !ok {
 			return fmt.Errorf("component specification missing for %s", node.Kind)
 		}
-		if node.Config.MeanServiceTimeUs != spec.MeanServiceTimeUs || node.Config.QueueLimit != spec.QueueLimit || node.Config.HitRate != spec.HitRate || node.Config.ReadServiceTimeUs != 0 || node.Config.WriteServiceTimeUs != 0 || node.Config.ServiceTimeModel == "exponential" {
+		if node.Config.MeanServiceTimeUs != spec.MeanServiceTimeUs || node.Config.QueueLimit != spec.QueueLimit || node.Config.HitRate != spec.HitRate || node.Config.FailureRate != 0 || node.Config.CacheCapacity != spec.CacheCapacity || node.Config.CacheTTLUs != spec.CacheTTLUs || node.Config.ReadServiceTimeUs != 0 || node.Config.WriteServiceTimeUs != 0 || node.Config.ServiceTimeModel == "exponential" {
 			return fmt.Errorf("%s must use this problem's fixed component performance", node.Kind)
 		}
 		if node.Config.ProcessingSlots > budget.MaxProcessingSlotsPerNode {

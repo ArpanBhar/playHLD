@@ -3,14 +3,14 @@ package api
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"playhld/backend/internal/storage"
 	"playhld/simulation/engine"
 	"playhld/simulation/model"
 )
@@ -20,7 +20,7 @@ type runInput struct {
 	Workload  model.Workload `json:"workload"`
 }
 
-func registerRunRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
+func registerRunRoutes(mux *http.ServeMux, db *storage.DB) {
 	mux.HandleFunc("POST /api/projects/{id}/runs", func(w http.ResponseWriter, r *http.Request) {
 		if !sameOrigin(r) {
 			writeError(w, 403, "ORIGIN_DENIED", "origin is not allowed")
@@ -44,7 +44,7 @@ func registerRunRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		}
 		var graphData []byte
 		err := db.QueryRow(r.Context(), `SELECT graph_json FROM architecture_versions WHERE id=$1 AND project_id=$2`, input.VersionID, projectID).Scan(&graphData)
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, 404, "NOT_FOUND", "version was not found")
 			return
 		}
@@ -70,13 +70,13 @@ func registerRunRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 			var id string
 			var result json.RawMessage
 			var createdAt time.Time
-			err := db.QueryRow(r.Context(), `SELECT id::text,result_json,created_at FROM simulation_runs WHERE project_id=$1 AND version_id=$2 AND config_hash=$3 AND engine_version=$4 AND provenance='server_native'`, projectID, input.VersionID, configHash, engine.EngineVersion).Scan(&id, &result, &createdAt)
+			err := db.QueryRow(r.Context(), `SELECT id,result_json,created_at FROM simulation_runs WHERE project_id=$1 AND version_id=$2 AND config_hash=$3 AND engine_version=$4 AND provenance='server_native'`, projectID, input.VersionID, configHash, engine.EngineVersion).Scan(&id, &result, &createdAt)
 			return id, result, createdAt, err
 		}
 		if existingID, existingResult, createdAt, err := lookup(); err == nil {
 			writeJSON(w, 200, map[string]any{"id": existingID, "projectId": projectID, "versionId": input.VersionID, "engineVersion": engine.EngineVersion, "configHash": configHash, "provenance": "server_native", "workload": input.Workload, "result": existingResult, "createdAt": createdAt})
 			return
-		} else if !errors.Is(err, pgx.ErrNoRows) {
+		} else if !errors.Is(err, sql.ErrNoRows) {
 			writeDatabaseError(w)
 			return
 		}
@@ -96,8 +96,8 @@ func registerRunRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		summaryData, _ := json.Marshal(result.Summary)
 		var runID string
 		var createdAt time.Time
-		err = db.QueryRow(r.Context(), `INSERT INTO simulation_runs(project_id,version_id,engine_version,config_hash,provenance,summary_json,workload_json,result_json) VALUES($1,$2,$3,$4,'server_native',$5,$6,$7) ON CONFLICT DO NOTHING RETURNING id::text,created_at`, projectID, input.VersionID, engine.EngineVersion, configHash, summaryData, workloadData, resultData).Scan(&runID, &createdAt)
-		if errors.Is(err, pgx.ErrNoRows) {
+		err = db.QueryRow(r.Context(), `INSERT INTO simulation_runs(project_id,version_id,engine_version,config_hash,provenance,summary_json,workload_json,result_json) VALUES($1,$2,$3,$4,'server_native',$5,$6,$7) ON CONFLICT DO NOTHING RETURNING id,created_at`, projectID, input.VersionID, engine.EngineVersion, configHash, summaryData, workloadData, resultData).Scan(&runID, &createdAt)
+		if errors.Is(err, sql.ErrNoRows) {
 			existingID, existingResult, existingAt, lookupErr := lookup()
 			if lookupErr != nil {
 				writeDatabaseError(w)
@@ -121,7 +121,7 @@ func registerRunRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		if !requireProject(w, r, db, user.ID, projectID, false) {
 			return
 		}
-		rows, err := db.Query(r.Context(), `SELECT id::text,version_id::text,engine_version,config_hash,provenance,summary_json,workload_json,created_at FROM simulation_runs WHERE project_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100`, projectID)
+		rows, err := db.Query(r.Context(), `SELECT id,version_id,engine_version,config_hash,provenance,summary_json,workload_json,created_at FROM simulation_runs WHERE project_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100`, projectID)
 		if err != nil {
 			writeDatabaseError(w)
 			return
@@ -161,8 +161,8 @@ func registerRunRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		var versionID, engineVersion, configHash, provenance string
 		var workload, result json.RawMessage
 		var createdAt time.Time
-		err := db.QueryRow(r.Context(), `SELECT version_id::text,engine_version,config_hash,provenance,workload_json,result_json,created_at FROM simulation_runs WHERE id=$1 AND project_id=$2`, runID, projectID).Scan(&versionID, &engineVersion, &configHash, &provenance, &workload, &result, &createdAt)
-		if errors.Is(err, pgx.ErrNoRows) {
+		err := db.QueryRow(r.Context(), `SELECT version_id,engine_version,config_hash,provenance,workload_json,result_json,created_at FROM simulation_runs WHERE id=$1 AND project_id=$2`, runID, projectID).Scan(&versionID, &engineVersion, &configHash, &provenance, &workload, &result, &createdAt)
+		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, 404, "NOT_FOUND", "run was not found")
 			return
 		}

@@ -7,27 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
-	"playhld/backend/internal/storage"
+	"playhld/content/challenges"
 )
 
 func TestPrivateDesignLifecycle(t *testing.T) {
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("set TEST_DATABASE_URL for PostgreSQL integration")
-	}
-	ctx := context.Background()
-	db, err := storage.Open(ctx, url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	if err := storage.Migrate(ctx, db); err != nil {
-		t.Fatal(err)
-	}
+	db := testDatabase(t)
 	server := NewServerWithOptions(Options{DB: db})
 	call := func(method, path string, body any, cookies []*http.Cookie, csrf string) *httptest.ResponseRecorder {
 		var data []byte
@@ -48,7 +35,7 @@ func TestPrivateDesignLifecycle(t *testing.T) {
 		server.ServeHTTP(response, request)
 		return response
 	}
-	register := func(suffix string) (string, []*http.Cookie, string) {
+	register := func(suffix string) (string, string, []*http.Cookie, string) {
 		email := fmt.Sprintf("test-%d-%s@example.test", time.Now().UnixNano(), suffix)
 		response := call("POST", "/api/auth/register", map[string]string{"email": email, "password": "correct horse battery staple"}, nil, "")
 		if response.Code != 201 {
@@ -71,11 +58,18 @@ func TestPrivateDesignLifecycle(t *testing.T) {
 			t.Fatal("csrf cookie missing")
 		}
 		t.Cleanup(func() { _, _ = db.Exec(context.Background(), `DELETE FROM users WHERE id=$1`, user.ID) })
-		return user.ID, cookies, csrf
+		return email, user.ID, cookies, csrf
 	}
-	_, aliceCookies, aliceCSRF := register("alice")
-	_, bobCookies, bobCSRF := register("bob")
-	graph := json.RawMessage(`{"schemaVersion":2,"nodes":[{"id":"source","kind":"source","position":{"x":0,"y":0},"config":{"queueLimit":0}}],"edges":[]}`)
+	aliceEmail, _, aliceCookies, aliceCSRF := register("alice")
+	_, _, bobCookies, bobCSRF := register("bob")
+	if got := call("POST", "/api/auth/register", map[string]string{"email": aliceEmail, "password": "correct horse battery staple"}, nil, ""); got.Code != 409 {
+		t.Fatalf("duplicate email accepted: %d %s", got.Code, got.Body.String())
+	}
+	challenge, _, err := challenges.Get("service-capacity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph := challenge.Starter
 	create := call("POST", "/api/designs", map[string]any{"name": "First design", "architecture": graph}, aliceCookies, aliceCSRF)
 	if create.Code != 201 {
 		t.Fatalf("create: %d %s", create.Code, create.Body.String())
@@ -120,5 +114,15 @@ func TestPrivateDesignLifecycle(t *testing.T) {
 	}
 	if got := call("GET", "/api/auth/me", nil, aliceCookies, ""); got.Code != 401 {
 		t.Fatalf("revoked session accepted: %d", got.Code)
+	}
+	if got := call("POST", "/api/auth/login", map[string]string{"email": aliceEmail, "password": "wrong password"}, nil, ""); got.Code != 401 {
+		t.Fatalf("wrong password accepted: %d", got.Code)
+	}
+	login := call("POST", "/api/auth/login", map[string]string{"email": aliceEmail, "password": "correct horse battery staple"}, nil, "")
+	if login.Code != 200 {
+		t.Fatalf("login failed: %d %s", login.Code, login.Body.String())
+	}
+	if got := call("GET", "/api/auth/me", nil, login.Result().Cookies(), ""); got.Code != 200 {
+		t.Fatalf("new login session failed: %d", got.Code)
 	}
 }

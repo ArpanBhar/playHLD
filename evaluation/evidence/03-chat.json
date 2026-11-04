@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 3,
+  "nodes": [
+    {
+      "id": "client",
+      "kind": "source",
+      "label": "Clients",
+      "position": {
+        "x": 0,
+        "y": 190
+      },
+      "config": {
+        "meanServiceTimeUs": 0,
+        "queueLimit": 0
+      }
+    },
+    {
+      "id": "load_balancer-db73a4b0",
+      "kind": "load_balancer",
+      "label": "Chat LB",
+      "position": {
+        "x": 230,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 300,
+        "queueLimit": 100,
+        "routingPolicy": "round_robin"
+      }
+    },
+    {
+      "id": "api-4311a2be",
+      "kind": "api",
+      "label": "Message API",
+      "position": {
+        "x": 460,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 20000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "message_queue-f68a97db",
+      "kind": "message_queue",
+      "label": "Delivery queue",
+      "position": {
+        "x": 690,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 1000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "worker-418fb005",
+      "kind": "worker",
+      "label": "Delivery worker",
+      "position": {
+        "x": 920,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 10000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "database-767ed238",
+      "kind": "database",
+      "label": "Message DB",
+      "position": {
+        "x": 1226.4957716701904,
+        "y": 289.4080338266385
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 5000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "api-c7453f82",
+      "kind": "api",
+      "label": "Presence API",
+      "position": {
+        "x": 570.2642706131078,
+        "y": 390.15856236786476
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 20000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "cache-98f097fd",
+      "kind": "cache",
+      "label": "Presence cache",
+      "position": {
+        "x": 902.8805496828752,
+        "y": 390.15856236786476
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 500,
+        "queueLimit": 100,
+        "hitRate": 0.8
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-7dc9c837",
+      "source": "client",
+      "target": "load_balancer-db73a4b0",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-38d6ad59",
+      "source": "load_balancer-db73a4b0",
+      "target": "api-4311a2be",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-f4b2a6db",
+      "source": "api-4311a2be",
+      "target": "message_queue-f68a97db",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-01395a94",
+      "source": "message_queue-f68a97db",
+      "target": "worker-418fb005",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-b721f5f3",
+      "source": "worker-418fb005",
+      "target": "database-767ed238",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-9db3a3b6",
+      "source": "load_balancer-db73a4b0",
+      "target": "api-c7453f82",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-8fd201e2",
+      "source": "cache-98f097fd",
+      "target": "database-767ed238",
+      "route": "cache_miss",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-23ca3d71",
+      "source": "api-c7453f82",
+      "target": "cache-98f097fd",
+      "route": "always",
+      "delayUs": 0
+    }
+  ]
+}

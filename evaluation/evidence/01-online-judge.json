@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 3,
+  "nodes": [
+    {
+      "id": "client",
+      "kind": "source",
+      "label": "Clients",
+      "position": {
+        "x": 0,
+        "y": 190
+      },
+      "config": {
+        "meanServiceTimeUs": 0,
+        "queueLimit": 0
+      }
+    },
+    {
+      "id": "load_balancer-88e3fb66",
+      "kind": "load_balancer",
+      "label": "Ingress LB",
+      "position": {
+        "x": 230,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 300,
+        "queueLimit": 100,
+        "routingPolicy": "round_robin"
+      }
+    },
+    {
+      "id": "api-ce35645d",
+      "kind": "api",
+      "label": "Judge API",
+      "position": {
+        "x": 460,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 20000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "cache-d2520f58",
+      "kind": "cache",
+      "label": "Submission cache",
+      "position": {
+        "x": 690,
+        "y": 170
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 500,
+        "queueLimit": 100,
+        "hitRate": 0.8
+      }
+    },
+    {
+      "id": "database-f6a3e5fc",
+      "kind": "database",
+      "label": "Submission DB",
+      "position": {
+        "x": 893.8794926004229,
+        "y": 330.4545454545455
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 5000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "message_queue-80c8ae7b",
+      "kind": "message_queue",
+      "label": "Job queue",
+      "position": {
+        "x": 732.0718816067654,
+        "y": 423.74207188160676
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 1000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "worker-bb8d2e23",
+      "kind": "worker",
+      "label": "Judge worker",
+      "position": {
+        "x": 1057.2251585623678,
+        "y": 423.74207188160676
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 10000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "object_storage-691159c3",
+      "kind": "object_storage",
+      "label": "Artifact store",
+      "position": {
+        "x": 1382.3784355179703,
+        "y": 423.74207188160676
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 5000,
+        "queueLimit": 100
+      }
+    },
+    {
+      "id": "api-a0ee01a6",
+      "kind": "api",
+      "label": "Submit API",
+      "position": {
+        "x": 575.4915098176813,
+        "y": 545.1792793960551
+      },
+      "config": {
+        "processingSlots": 10,
+        "maxInFlight": 110,
+        "meanServiceTimeUs": 20000,
+        "queueLimit": 100
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-c4075866",
+      "source": "client",
+      "target": "load_balancer-88e3fb66",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-b05da972",
+      "source": "load_balancer-88e3fb66",
+      "target": "api-ce35645d",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-7b3bc294",
+      "source": "api-ce35645d",
+      "target": "cache-d2520f58",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-04a579ce",
+      "source": "cache-d2520f58",
+      "target": "database-f6a3e5fc",
+      "route": "cache_miss",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-940bb688",
+      "source": "message_queue-80c8ae7b",
+      "target": "worker-bb8d2e23",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-381ebdce",
+      "source": "worker-bb8d2e23",
+      "target": "object_storage-691159c3",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-54d91c4c",
+      "source": "load_balancer-88e3fb66",
+      "target": "api-a0ee01a6",
+      "route": "always",
+      "delayUs": 0
+    },
+    {
+      "id": "edge-9632786b",
+      "source": "api-a0ee01a6",
+      "target": "message_queue-80c8ae7b",
+      "route": "always",
+      "delayUs": 0
+    }
+  ]
+}

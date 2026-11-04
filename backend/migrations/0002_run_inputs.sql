@@ -1,2 +1,3 @@
-ALTER TABLE simulation_runs ADD COLUMN IF NOT EXISTS workload_json jsonb CHECK (workload_json IS NULL OR jsonb_typeof(workload_json) = 'object');
-ALTER TABLE simulation_runs ADD COLUMN IF NOT EXISTS result_json jsonb CHECK (result_json IS NULL OR jsonb_typeof(result_json) = 'object');
+-- Included in 0001 for the SQLite schema. This retained migration marker keeps
+-- the ordered migration history stable for new and existing installations.
+SELECT 1;

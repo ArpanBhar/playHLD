@@ -40,6 +40,20 @@ func Evaluate(result engine.Result, workload model.Workload, rules []Rule) ([]Ou
 		var value float64
 		measurable := true
 		switch rule.Metric {
+		case "job_completion_fraction":
+			out.Unit = "%"
+			if workload.Scenario != "async_jobs" || result.Summary.JobsEnqueued == 0 {
+				measurable = false
+			} else {
+				value = float64(result.Summary.JobsCompleted) * 100 / float64(result.Summary.JobsEnqueued)
+			}
+		case "functional_correct_fraction":
+			out.Unit = "%"
+			if workload.Scenario == "" || result.Summary.Generated == 0 {
+				measurable = false
+			} else {
+				value = float64(result.Summary.Correct) * 100 / float64(result.Summary.Generated)
+			}
 		case "success_fraction":
 			out.Unit = "%"
 			if result.Summary.Generated == 0 {

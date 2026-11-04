@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -11,8 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"playhld/backend/internal/storage"
 	"playhld/simulation/model"
 )
 
@@ -64,7 +64,7 @@ func writeDatabaseError(w http.ResponseWriter) {
 	writeError(w, http.StatusInternalServerError, "DATABASE_ERROR", "could not complete request")
 }
 
-func registerDesignRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
+func registerDesignRoutes(mux *http.ServeMux, db *storage.DB) {
 	mux.HandleFunc("POST /api/designs", func(w http.ResponseWriter, r *http.Request) {
 		if !sameOrigin(r) {
 			writeError(w, http.StatusForbidden, "ORIGIN_DENIED", "origin is not allowed")
@@ -85,7 +85,7 @@ func registerDesignRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		var design designResponse
 		design.Name = name
 		design.Architecture = graph
-		err := db.QueryRow(r.Context(), `INSERT INTO designs(owner_id,name,graph_json) VALUES($1,$2,$3) RETURNING id::text,version,updated_at`, user.ID, name, graph).Scan(&design.ID, &design.Version, &design.UpdatedAt)
+		err := db.QueryRow(r.Context(), `INSERT INTO designs(owner_id,name,graph_json) VALUES($1,$2,$3) RETURNING id,version,updated_at`, user.ID, name, graph).Scan(&design.ID, &design.Version, &design.UpdatedAt)
 		if err != nil {
 			writeDatabaseError(w)
 			return
@@ -108,10 +108,10 @@ func registerDesignRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 			limit = value
 		}
 		cursor := r.URL.Query().Get("cursor")
-		var rows pgx.Rows
+		var rows *sql.Rows
 		var err error
 		if cursor == "" {
-			rows, err = db.Query(r.Context(), `SELECT id::text,name,version,updated_at FROM designs WHERE owner_id=$1 ORDER BY updated_at DESC,id DESC LIMIT $2`, user.ID, limit+1)
+			rows, err = db.Query(r.Context(), `SELECT id,name,version,updated_at FROM designs WHERE owner_id=$1 ORDER BY updated_at DESC,id DESC LIMIT $2`, user.ID, limit+1)
 		} else {
 			decoded, decodeErr := base64.RawURLEncoding.DecodeString(cursor)
 			parts := strings.SplitN(string(decoded), "|", 2)
@@ -124,7 +124,7 @@ func registerDesignRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 				writeError(w, http.StatusBadRequest, "INVALID_CURSOR", "cursor is invalid")
 				return
 			}
-			rows, err = db.Query(r.Context(), `SELECT id::text,name,version,updated_at FROM designs WHERE owner_id=$1 AND (updated_at,id)<($2,$3) ORDER BY updated_at DESC,id DESC LIMIT $4`, user.ID, instant, parts[1], limit+1)
+			rows, err = db.Query(r.Context(), `SELECT id,name,version,updated_at FROM designs WHERE owner_id=$1 AND (updated_at,id)<($2,$3) ORDER BY updated_at DESC,id DESC LIMIT $4`, user.ID, instant, parts[1], limit+1)
 		}
 		if err != nil {
 			writeDatabaseError(w)
@@ -164,8 +164,8 @@ func registerDesignRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 			return
 		}
 		var design designResponse
-		err := db.QueryRow(r.Context(), `SELECT id::text,name,graph_json,version,updated_at FROM designs WHERE id=$1 AND owner_id=$2`, id, user.ID).Scan(&design.ID, &design.Name, &design.Architecture, &design.Version, &design.UpdatedAt)
-		if errors.Is(err, pgx.ErrNoRows) {
+		err := db.QueryRow(r.Context(), `SELECT id,name,graph_json,version,updated_at FROM designs WHERE id=$1 AND owner_id=$2`, id, user.ID).Scan(&design.ID, &design.Name, &design.Architecture, &design.Version, &design.UpdatedAt)
+		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "design not found")
 			return
 		}
@@ -206,8 +206,8 @@ func registerDesignRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 		design.ID = id
 		design.Name = name
 		design.Architecture = graph
-		err := db.QueryRow(r.Context(), `UPDATE designs SET name=$1,graph_json=$2,version=version+1,updated_at=now() WHERE id=$3 AND owner_id=$4 AND version=$5 RETURNING version,updated_at`, name, graph, id, user.ID, input.ExpectedVersion).Scan(&design.Version, &design.UpdatedAt)
-		if errors.Is(err, pgx.ErrNoRows) {
+		err := db.QueryRow(r.Context(), `UPDATE designs SET name=$1,graph_json=$2,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=$3 AND owner_id=$4 AND version=$5 RETURNING version,updated_at`, name, graph, id, user.ID, input.ExpectedVersion).Scan(&design.Version, &design.UpdatedAt)
+		if errors.Is(err, sql.ErrNoRows) {
 			var exists bool
 			if queryErr := db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM designs WHERE id=$1 AND owner_id=$2)`, id, user.ID).Scan(&exists); queryErr != nil {
 				writeDatabaseError(w)
@@ -246,7 +246,12 @@ func registerDesignRoutes(mux *http.ServeMux, db *pgxpool.Pool) {
 			writeDatabaseError(w)
 			return
 		}
-		if command.RowsAffected() == 0 {
+		rowsAffected, err := command.RowsAffected()
+		if err != nil {
+			writeDatabaseError(w)
+			return
+		}
+		if rowsAffected == 0 {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "design not found")
 			return
 		}

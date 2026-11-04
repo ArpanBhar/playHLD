@@ -38,6 +38,9 @@ type NodeConfig struct {
 	RoutingPolicy      string  `json:"routingPolicy,omitempty"`
 	QueueLimit         int     `json:"queueLimit"`
 	ServiceTimeModel   string  `json:"serviceTimeModel,omitempty"`
+	FailureRate        float64 `json:"failureRate,omitempty"`
+	CacheCapacity      int     `json:"cacheCapacity,omitempty"`
+	CacheTTLUs         int64   `json:"cacheTtlUs,omitempty"`
 }
 type Node struct {
 	ID       string     `json:"id"`
@@ -69,6 +72,9 @@ type Workload struct {
 	ReadFraction   *float64         `json:"readFraction,omitempty"`
 	Segments       []ArrivalSegment `json:"segments,omitempty"`
 	ArrivalModel   string           `json:"arrivalModel,omitempty"`
+	Scenario       string           `json:"scenario,omitempty"`
+	KeySpace       int              `json:"keySpace,omitempty"`
+	HotKeyFraction *float64         `json:"hotKeyFraction,omitempty"`
 }
 type ArrivalSegment struct {
 	StartUs int64 `json:"startUs"`
@@ -137,7 +143,7 @@ func ValidateArchitecture(a Architecture) []ValidationIssue {
 			add("INVALID_POSITION", p+".position", "coordinates must be finite and within bounds")
 		}
 		if n.Kind == "source" {
-			if n.Config.ProcessingSlots != 0 || n.Config.MaxInFlight != 0 || n.Config.MeanServiceTimeUs != 0 || n.Config.QueueLimit != 0 || n.Config.HitRate != 0 || n.Config.RoutingPolicy != "" {
+			if n.Config.ProcessingSlots != 0 || n.Config.MaxInFlight != 0 || n.Config.MeanServiceTimeUs != 0 || n.Config.QueueLimit != 0 || n.Config.HitRate != 0 || n.Config.FailureRate != 0 || n.Config.CacheCapacity != 0 || n.Config.CacheTTLUs != 0 || n.Config.RoutingPolicy != "" {
 				add("INVALID_CONFIG", p+".config", "traffic sources do not have processing capacity")
 			}
 		} else {
@@ -162,6 +168,9 @@ func ValidateArchitecture(a Architecture) []ValidationIssue {
 			if math.IsNaN(n.Config.HitRate) || math.IsInf(n.Config.HitRate, 0) || n.Config.HitRate < 0 || n.Config.HitRate > 1 {
 				add("OUT_OF_RANGE", p+".config.hitRate", "hit rate must be between zero and one")
 			}
+			if math.IsNaN(n.Config.FailureRate) || math.IsInf(n.Config.FailureRate, 0) || n.Config.FailureRate < 0 || n.Config.FailureRate > 1 {
+				add("OUT_OF_RANGE", p+".config.failureRate", "failure rate must be between zero and one")
+			}
 			if n.Config.RoutingPolicy != "" && n.Config.RoutingPolicy != "round_robin" && n.Config.RoutingPolicy != "weighted" {
 				add("UNSUPPORTED_POLICY", p+".config.routingPolicy", "routing policy must be round_robin or weighted")
 			}
@@ -170,6 +179,12 @@ func ValidateArchitecture(a Architecture) []ValidationIssue {
 			}
 			if n.Kind != "cache" && n.Kind != "cdn" && n.Config.HitRate != 0 {
 				add("INVALID_CONFIG", p+".config.hitRate", "only caches and CDNs have a hit rate")
+			}
+			if n.Config.CacheCapacity < 0 || n.Config.CacheCapacity > 100000 || n.Config.CacheTTLUs < 0 || n.Config.CacheTTLUs > MaxDurationUs {
+				add("OUT_OF_RANGE", p+".config.cacheCapacity", "cache capacity and TTL must be within range")
+			}
+			if n.Kind != "cache" && n.Kind != "cdn" && (n.Config.CacheCapacity != 0 || n.Config.CacheTTLUs != 0) {
+				add("INVALID_CONFIG", p+".config.cacheCapacity", "cache settings require a cache or CDN")
 			}
 			if n.Kind != "database" && n.Kind != "object_storage" && (n.Config.ReadServiceTimeUs != 0 || n.Config.WriteServiceTimeUs != 0) {
 				add("INVALID_CONFIG", p+".config.readServiceTimeUs", "read/write overrides require a data store")
@@ -192,7 +207,7 @@ func ValidateArchitecture(a Architecture) []ValidationIssue {
 		if _, ok := nodes[e.Target]; !ok {
 			add("UNKNOWN_NODE", p+".target", "target node does not exist")
 		}
-		if e.Route != "always" && e.Route != "cache_hit" && e.Route != "cache_miss" && e.Route != "weighted" {
+		if e.Route != "always" && e.Route != "cache_hit" && e.Route != "cache_miss" && e.Route != "weighted" && e.Route != "read" && e.Route != "write" {
 			add("UNSUPPORTED_ROUTE", p+".route", "route type is unsupported")
 		}
 		if math.IsNaN(e.Weight) || math.IsInf(e.Weight, 0) || e.Weight < 0 || e.Weight > 1 {
@@ -231,6 +246,12 @@ func ValidateWorkload(w Workload) []ValidationIssue {
 	}
 	if w.ArrivalModel != "" && w.ArrivalModel != "fixed" && w.ArrivalModel != "poisson" {
 		add("UNSUPPORTED_MODEL", "workload.arrivalModel", "arrival model must be fixed or poisson")
+	}
+	if w.Scenario != "" && w.Scenario != "url_shortener" && w.Scenario != "key_value" && w.Scenario != "async_jobs" {
+		add("UNSUPPORTED_SCENARIO", "workload.scenario", "scenario must be url_shortener, key_value, or async_jobs")
+	}
+	if w.KeySpace < 0 || w.KeySpace > 10000 || w.HotKeyFraction != nil && (math.IsNaN(*w.HotKeyFraction) || math.IsInf(*w.HotKeyFraction, 0) || *w.HotKeyFraction < 0 || *w.HotKeyFraction > 1) {
+		add("OUT_OF_RANGE", "workload.keySpace", "key space and hot-key fraction are out of range")
 	}
 	if len(w.Segments) > 100 {
 		add("LIMIT_EXCEEDED", "workload.segments", "too many traffic segments")
@@ -320,6 +341,22 @@ func ValidateSimulation(c SimulationConfig) []ValidationIssue {
 				if edge.Route != "always" {
 					issues = append(issues, ValidationIssue{"INVALID_ROUTE", "architecture.edges", "message queue consumer routes must be always"})
 				}
+			}
+		case "api", "worker":
+			if len(edges) > 2 {
+				issues = append(issues, ValidationIssue{"AMBIGUOUS_ROUTE", "architecture.edges", "a service supports one always route or one read and one write route"})
+			}
+			if len(edges) == 2 && !(edges[0].Route == "read" && edges[1].Route == "write" || edges[0].Route == "write" && edges[1].Route == "read") {
+				issues = append(issues, ValidationIssue{"AMBIGUOUS_ROUTE", "architecture.edges", "two service routes must be read and write"})
+			}
+			if len(edges) == 1 && edges[0].Route != "always" && edges[0].Route != "read" && edges[0].Route != "write" {
+				issues = append(issues, ValidationIssue{"INVALID_ROUTE", "architecture.edges", "service route must be always, read, or write"})
+			}
+			if c.Workload.Scenario == "" && len(edges) > 1 {
+				issues = append(issues, ValidationIssue{"UNSUPPORTED_ROUTE", "architecture.edges", "read/write service routing needs a functional scenario"})
+			}
+			if c.Workload.Scenario == "" && len(edges) == 1 && edges[0].Route != "always" {
+				issues = append(issues, ValidationIssue{"UNSUPPORTED_ROUTE", "architecture.edges", "read/write service routing needs a functional scenario"})
 			}
 		default:
 			if len(edges) > 1 || len(edges) == 1 && edges[0].Route != "always" {

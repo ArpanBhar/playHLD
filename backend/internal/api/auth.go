@@ -16,9 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"playhld/backend/internal/identity"
+	"playhld/backend/internal/storage"
 )
 
 const sessionCookieName = "sf_session"
@@ -98,7 +97,7 @@ func clearSessionCookies(w http.ResponseWriter, secure bool) {
 	}
 }
 
-func authenticate(ctx context.Context, db *pgxpool.Pool, r *http.Request) (actor, error) {
+func authenticate(ctx context.Context, db *storage.DB, r *http.Request) (actor, error) {
 	var user actor
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil {
@@ -109,11 +108,11 @@ func authenticate(ctx context.Context, db *pgxpool.Pool, r *http.Request) (actor
 		return user, errors.New("invalid session")
 	}
 	user.TokenHash = sha256.Sum256(bytes)
-	err = db.QueryRow(ctx, `SELECT u.id::text,u.email,s.csrf_hash FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>now()`, user.TokenHash[:]).Scan(&user.ID, &user.Email, &user.CSRFHash)
+	err = db.QueryRow(ctx, `SELECT u.id,u.email,s.csrf_hash FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>CURRENT_TIMESTAMP`, user.TokenHash[:]).Scan(&user.ID, &user.Email, &user.CSRFHash)
 	return user, err
 }
 
-func requireActor(w http.ResponseWriter, r *http.Request, db *pgxpool.Pool, csrf bool) (actor, bool) {
+func requireActor(w http.ResponseWriter, r *http.Request, db *storage.DB, csrf bool) (actor, bool) {
 	user, err := authenticate(r.Context(), db, r)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "sign in to continue")
@@ -171,7 +170,7 @@ func (l *authLimiter) allow(remote string) bool {
 	return window.count <= 20
 }
 
-func registerAuthRoutes(mux *http.ServeMux, db *pgxpool.Pool, secure bool) {
+func registerAuthRoutes(mux *http.ServeMux, db *storage.DB, secure bool) {
 	limiter := newAuthLimiter()
 	dummyHash, _ := identity.HashPassword("dummy password for timing checks")
 	mux.HandleFunc("POST /api/auth/register", func(w http.ResponseWriter, r *http.Request) {
@@ -214,10 +213,9 @@ func registerAuthRoutes(mux *http.ServeMux, db *pgxpool.Pool, secure bool) {
 		}
 		defer tx.Rollback(r.Context())
 		var userID string
-		err = tx.QueryRow(r.Context(), `INSERT INTO users(email,password_hash) VALUES($1,$2) RETURNING id::text`, email, hash).Scan(&userID)
+		err = tx.QueryRow(r.Context(), `INSERT INTO users(email,password_hash) VALUES($1,$2) RETURNING id`, email, hash).Scan(&userID)
 		if err != nil {
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			if storage.IsUniqueConstraint(err) {
 				writeError(w, http.StatusConflict, "EMAIL_IN_USE", "email is already registered")
 			} else {
 				writeError(w, http.StatusInternalServerError, "DATABASE_ERROR", "could not register")
@@ -256,7 +254,7 @@ func registerAuthRoutes(mux *http.ServeMux, db *pgxpool.Pool, secure bool) {
 			return
 		}
 		var userID, passwordHash string
-		err = db.QueryRow(r.Context(), `SELECT id::text,password_hash FROM users WHERE email=$1`, email).Scan(&userID, &passwordHash)
+		err = db.QueryRow(r.Context(), `SELECT id,password_hash FROM users WHERE email=$1`, email).Scan(&userID, &passwordHash)
 		if err != nil {
 			passwordHash = dummyHash
 		}
@@ -301,7 +299,7 @@ func registerAuthRoutes(mux *http.ServeMux, db *pgxpool.Pool, secure bool) {
 		if !ok {
 			return
 		}
-		if _, err := db.Exec(r.Context(), `UPDATE sessions SET revoked_at=now() WHERE token_hash=$1`, user.TokenHash[:]); err != nil {
+		if _, err := db.Exec(r.Context(), `UPDATE sessions SET revoked_at=CURRENT_TIMESTAMP WHERE token_hash=$1`, user.TokenHash[:]); err != nil {
 			writeError(w, http.StatusInternalServerError, "DATABASE_ERROR", "could not sign out")
 			return
 		}

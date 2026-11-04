@@ -19,17 +19,19 @@ func main() {
 		port = "8080"
 	}
 	options := api.Options{SecureCookies: os.Getenv("COOKIE_SECURE") == "1", EnableNativeSimulation: os.Getenv("ENABLE_NATIVE_SIMULATION") == "1"}
-	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
-		pool, err := storage.Open(context.Background(), databaseURL)
-		if err != nil {
-			log.Fatalf("database connection failed: %v", err)
-		}
-		defer pool.Close()
-		if err := storage.Migrate(context.Background(), pool); err != nil {
-			log.Fatalf("database migration failed: %v", err)
-		}
-		options.DB = pool
+	databasePath := os.Getenv("DATABASE_PATH")
+	if databasePath == "" {
+		databasePath = "playhld.db"
 	}
+	database, err := storage.Open(context.Background(), databasePath)
+	if err != nil {
+		log.Fatalf("database connection failed: %v", err)
+	}
+	defer database.Close()
+	if err := storage.Migrate(context.Background(), database); err != nil {
+		log.Fatalf("database migration failed: %v", err)
+	}
+	options.DB = database
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           api.NewServerWithOptions(options),

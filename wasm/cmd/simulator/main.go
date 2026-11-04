@@ -24,6 +24,7 @@ type response struct {
 	Handle  string               `json:"handle,omitempty"`
 	Outcome *engine.BatchOutcome `json:"outcome,omitempty"`
 	Goals   json.RawMessage      `json:"goals,omitempty"`
+	State   string               `json:"state,omitempty"`
 	Error   string               `json:"error,omitempty"`
 }
 
@@ -113,6 +114,33 @@ func main() {
 			return errResponse(err)
 		}
 		if err := e.ApplyArchitecture(architecture); err != nil {
+			return errResponse(err)
+		}
+		return encode(response{OK: true})
+	})
+	register("playHLDExportState", func(args []js.Value) string {
+		if len(args) != 1 {
+			return errResponse(fmt.Errorf("expected handle"))
+		}
+		e, ok := handles[args[0].String()]
+		if !ok {
+			return errResponse(fmt.Errorf("unknown simulation handle"))
+		}
+		state, err := e.ExportFunctionalState()
+		if err != nil {
+			return errResponse(err)
+		}
+		return encode(response{OK: true, State: string(state)})
+	})
+	register("playHLDImportState", func(args []js.Value) string {
+		if len(args) != 2 || args[1].Type() != js.TypeString {
+			return errResponse(fmt.Errorf("expected handle and state JSON"))
+		}
+		e, ok := handles[args[0].String()]
+		if !ok {
+			return errResponse(fmt.Errorf("unknown simulation handle"))
+		}
+		if err := e.ImportFunctionalState([]byte(args[1].String())); err != nil {
 			return errResponse(err)
 		}
 		return encode(response{OK: true})
