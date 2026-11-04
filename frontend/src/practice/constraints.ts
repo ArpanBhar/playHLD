@@ -29,7 +29,7 @@ export function problemGraphError(problem: Challenge, graph: Architecture): stri
     if (!Number.isInteger(node.config.maxInFlight) || (node.config.maxInFlight ?? 0) < (node.config.processingSlots ?? 0) || (node.config.maxInFlight ?? 0) > (node.config.processingSlots ?? 0) + node.config.queueLimit) return 'In-flight limit must fit between processing slots and processing slots plus queue limit.'
     const spec = problem.componentSpecs[node.kind]
     if (!spec) return `No specification for ${node.kind}.`
-    if (node.config.meanServiceTimeUs !== spec.meanServiceTimeUs || node.config.queueLimit !== spec.queueLimit || (node.config.hitRate ?? 0) !== (spec.hitRate ?? 0) || (node.config.readServiceTimeUs ?? 0) !== 0 || (node.config.writeServiceTimeUs ?? 0) !== 0 || node.config.serviceTimeModel === 'exponential') return `${node.label} must use the problem's fixed performance settings.`
+    if (node.config.meanServiceTimeUs !== spec.meanServiceTimeUs || node.config.queueLimit !== spec.queueLimit || (node.config.hitRate ?? 0) !== (spec.hitRate ?? 0) || (node.config.failureRate ?? 0) !== 0 || (node.config.cacheCapacity ?? 0) !== (spec.cacheCapacity ?? 0) || (node.config.cacheTtlUs ?? 0) !== (spec.cacheTtlUs ?? 0) || (node.config.readServiceTimeUs ?? 0) !== 0 || (node.config.writeServiceTimeUs ?? 0) !== 0 || node.config.serviceTimeModel === 'exponential') return `${node.label} must use the problem's fixed performance settings.`
     if ((node.config.processingSlots ?? 0) > budget.maxProcessingSlotsPerNode) return `Limit: ${budget.maxProcessingSlotsPerNode} processing slots per component.`
   }
   if (usage.slots > budget.maxSlots) return `Processing slot budget exceeded: ${usage.slots}/${budget.maxSlots}.`

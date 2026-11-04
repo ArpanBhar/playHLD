@@ -10,6 +10,9 @@ export interface NodeConfig {
   writeServiceTimeUs?: number
   routingPolicy?: 'round_robin' | 'weighted'
   serviceTimeModel?: 'constant' | 'exponential'
+  failureRate?: number
+  cacheCapacity?: number
+  cacheTtlUs?: number
 }
 
 export interface ArchitectureNode {
@@ -24,7 +27,7 @@ export interface ArchitectureEdge {
   id: string
   source: string
   target: string
-  route: 'always' | 'cache_hit' | 'cache_miss' | 'weighted'
+  route: 'always' | 'cache_hit' | 'cache_miss' | 'weighted' | 'read' | 'write'
   weight?: number
   delayUs: number
 }
@@ -41,6 +44,7 @@ export type WorkloadProfile = 'steady' | 'ramp' | 'burst'
 export interface NodeMetrics {
   completions: number
   rejected: number
+  failures: number
   queueDepth: number
   maxQueueDepth: number
   processingUtilization: number | null
@@ -73,18 +77,25 @@ export interface Result {
     processedEvents: number
     p95LatencyUs: number | null
     p99LatencyUs: number | null
+    correct: number
+    incorrect: number
+    jobsEnqueued: number
+    jobsCompleted: number
+    jobsFailed: number
+    jobsUnfinished: number
   }
   warnings: string[] | null
+  functionalTrace?: { requestId: number; operation: string; key: string; path: string[]; output: string; expected: string; correct: boolean }[]
 }
 
 export interface GoalRule { id: string; label: string; metric: string; operator: 'gte' | 'lte'; target: number; nodeId?: string }
 export interface GoalOutcome { id: string; label: string; status: 'met' | 'unmet' | 'not_measurable'; observed: number | null; target: number; unit: string; explanation: string }
 export interface Challenge {
   id: string; version: number; title: string; difficulty: string; scenario: string
-  starter: Architecture; workload: { schemaVersion: number; seed: string; entryNodeId: string; durationUs: number; drainTimeoutUs: number; arrivalRateRps: number; readFraction: number; segments?: TrafficSegment[] }
+  starter: Architecture; workload: { schemaVersion: number; seed: string; entryNodeId: string; durationUs: number; drainTimeoutUs: number; arrivalRateRps: number; readFraction: number; segments?: TrafficSegment[]; scenario?: 'url_shortener' | 'key_value' | 'async_jobs'; keySpace?: number; hotKeyFraction?: number }
   goals: GoalRule[]; hints: string[]; allowedKinds: Kind[]
   resourceBudget: { maxNodes: number; maxSlots: number; maxProcessingSlotsPerNode: number; maxByKind: Partial<Record<Kind, number>> }
-  componentSpecs: Partial<Record<Kind, { meanServiceTimeUs: number; queueLimit: number; hitRate?: number }>>
+  componentSpecs: Partial<Record<Kind, { meanServiceTimeUs: number; queueLimit: number; hitRate?: number; cacheCapacity?: number; cacheTtlUs?: number }>>
   solution: { explanation: string; architecture: Architecture }
 }
 

@@ -3,15 +3,16 @@ import type { Architecture, GoalOutcome, GoalRule, Result, Snapshot, TrafficSegm
 import { compileTraffic } from './workload'
 
 type Status = 'loading' | 'ready' | 'running' | 'paused' | 'stopped' | 'completed' | 'error'
+export type FunctionalWorkload = { scenario?: 'url_shortener' | 'key_value' | 'async_jobs'; keySpace?: number; hotKeyFraction?: number }
 
-function liveConfig(architecture: Architecture, rateRps: number, durationSeconds: number, seed: string, readPercent: number, profile: WorkloadProfile, arrivalModel: 'fixed' | 'poisson', fixedSegments?: TrafficSegment[]) {
+function liveConfig(architecture: Architecture, rateRps: number, durationSeconds: number, seed: string, readPercent: number, profile: WorkloadProfile, arrivalModel: 'fixed' | 'poisson', fixedSegments?: TrafficSegment[], functional?: FunctionalWorkload) {
   const entryNodeId = architecture.nodes.find(node => node.kind === 'source')?.id
   if (!entryNodeId) throw new Error('Add a Source node before running.')
   // Each engine instance is bounded; the worker starts the next window automatically.
   const durationUs = Math.max(1, Math.min(durationSeconds * 1_000_000, Math.floor(80_000_000_000 / rateRps)))
   const cycleSeconds = durationUs / 1_000_000
   const segments = fixedSegments ?? (cycleSeconds >= 4 ? compileTraffic(profile, cycleSeconds, rateRps) : undefined)
-  return JSON.stringify({ architecture, workload: { schemaVersion: 1, seed, entryNodeId, durationUs, drainTimeoutUs: 0, arrivalRateRps: rateRps, readFraction: readPercent / 100, ...(segments ? { segments } : {}), ...(arrivalModel === 'poisson' ? { arrivalModel } : {}) }, snapshotIntervalUs: 1_000_000 })
+  return JSON.stringify({ architecture, workload: { schemaVersion: 1, seed, entryNodeId, durationUs, drainTimeoutUs: 0, arrivalRateRps: rateRps, readFraction: readPercent / 100, ...(segments ? { segments } : {}), ...(arrivalModel === 'poisson' ? { arrivalModel } : {}), ...functional }, snapshotIntervalUs: 1_000_000 })
 }
 
 export function useSimulation(enabled = true) {
@@ -56,7 +57,7 @@ export function useSimulation(enabled = true) {
     return () => { worker.terminate(); workerRef.current = null }
   }, [enabled])
 
-  const run = useCallback((architecture: Architecture, rateRps: number, durationSeconds: number, seed: string, readPercent: number, rules?: GoalRule[], drainTimeoutUs = 5_000_000, segments?: TrafficSegment[], arrivalModel: 'fixed' | 'poisson' = 'fixed') => {
+  const run = useCallback((architecture: Architecture, rateRps: number, durationSeconds: number, seed: string, readPercent: number, rules?: GoalRule[], drainTimeoutUs = 5_000_000, segments?: TrafficSegment[], arrivalModel: 'fixed' | 'poisson' = 'fixed', functional?: FunctionalWorkload) => {
     if (!workerRef.current || status === 'loading') return
     const entryNodeId = architecture.nodes.find(node => node.kind === 'source')?.id
     if (!entryNodeId) { setError('Add a Source node before running.'); setStatus('error'); return }
@@ -74,15 +75,15 @@ export function useSimulation(enabled = true) {
     setStatus('running')
     workerRef.current.postMessage({ type: 'CREATE', runId, goals: rules ? JSON.stringify(rules) : undefined, config: JSON.stringify({
       architecture,
-      workload: { schemaVersion: 1, seed, entryNodeId, durationUs: durationSeconds * 1_000_000, drainTimeoutUs, arrivalRateRps: rateRps, readFraction: readPercent / 100, ...(segments ? { segments } : {}), ...(arrivalModel === 'poisson' ? { arrivalModel } : {}) },
+      workload: { schemaVersion: 1, seed, entryNodeId, durationUs: durationSeconds * 1_000_000, drainTimeoutUs, arrivalRateRps: rateRps, readFraction: readPercent / 100, ...(segments ? { segments } : {}), ...(arrivalModel === 'poisson' ? { arrivalModel } : {}), ...functional },
       snapshotIntervalUs: 1_000_000,
     }) })
   }, [status])
 
-  const startLive = useCallback((architecture: Architecture, rateRps: number, durationSeconds: number, seed: string, readPercent: number, profile: WorkloadProfile, arrivalModel: 'fixed' | 'poisson', fixedSegments?: TrafficSegment[]) => {
+  const startLive = useCallback((architecture: Architecture, rateRps: number, durationSeconds: number, seed: string, readPercent: number, profile: WorkloadProfile, arrivalModel: 'fixed' | 'poisson', fixedSegments?: TrafficSegment[], functional?: FunctionalWorkload) => {
     if (!workerRef.current || status === 'loading') return
     let config: string
-    try { config = liveConfig(architecture, rateRps, durationSeconds, seed, readPercent, profile, arrivalModel, fixedSegments) }
+    try { config = liveConfig(architecture, rateRps, durationSeconds, seed, readPercent, profile, arrivalModel, fixedSegments, functional) }
     catch (error) { setError(error instanceof Error ? error.message : String(error)); setStatus('error'); return }
     runIdRef.current += 1
     setError(null); setWarning(null); setLiveP95LatencyUs(null); setLiveP99LatencyUs(null); setResult(null); setGoals(null); setSnapshots([])
@@ -90,9 +91,9 @@ export function useSimulation(enabled = true) {
     workerRef.current.postMessage({ type: 'LIVE_CREATE', runId: runIdRef.current, config })
   }, [status])
 
-  const updateLive = useCallback((architecture: Architecture, rateRps: number, durationSeconds: number, seed: string, readPercent: number, profile: WorkloadProfile, arrivalModel: 'fixed' | 'poisson', fixedSegments?: TrafficSegment[]) => {
+  const updateLive = useCallback((architecture: Architecture, rateRps: number, durationSeconds: number, seed: string, readPercent: number, profile: WorkloadProfile, arrivalModel: 'fixed' | 'poisson', fixedSegments?: TrafficSegment[], functional?: FunctionalWorkload) => {
     if (!workerRef.current || !wasLiveRef.current) return
-    try { workerRef.current.postMessage({ type: 'LIVE_UPDATE', runId: runIdRef.current, config: liveConfig(architecture, rateRps, durationSeconds, seed, readPercent, profile, arrivalModel, fixedSegments) }) }
+    try { workerRef.current.postMessage({ type: 'LIVE_UPDATE', runId: runIdRef.current, config: liveConfig(architecture, rateRps, durationSeconds, seed, readPercent, profile, arrivalModel, fixedSegments, functional) }) }
     catch (error) { setWarning(error instanceof Error ? error.message : String(error)) }
   }, [])
 

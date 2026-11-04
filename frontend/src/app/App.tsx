@@ -54,14 +54,13 @@ export default function App() {
   const [descriptionExpanded, setDescriptionExpanded] = useState(initialLayout.descriptionExpanded)
   const layoutToSave = useRef<WorkspaceLayout>(initialLayout)
   const [problemsOpen, setProblemsOpen] = useState(false)
-  const [flowPlaying, setFlowPlaying] = useState(true)
   const workspaceRef = useRef<HTMLElement>(null)
   const studioRef = useRef<HTMLDivElement>(null)
   const [mode, setMode] = useState<Mode>(path.startsWith('/problems') || path.startsWith('/practice') ? 'Practice' : path === '/contest' ? 'Contest' : 'Dev')
   const [architecture, setArchitecture] = useState<Architecture>(loadDraft)
   const architectureRef = useRef(architecture)
   const devArchitectureRef = useRef(architecture)
-  const devWorkloadRef = useRef({ rateRps: 500, durationSeconds: 30, readPercent: 100, profile: 'steady' as WorkloadProfile, arrivalModel: 'fixed' as 'fixed' | 'poisson', seed: '42' })
+  const devWorkloadRef = useRef({ rateRps: 500, durationSeconds: 30, readPercent: 100, profile: 'steady' as WorkloadProfile, arrivalModel: 'fixed' as 'fixed' | 'poisson', seed: '42', scenario: '' as '' | 'url_shortener' | 'key_value' | 'async_jobs', keySpace: 64 })
   const dragStartRef = useRef<Architecture | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>('api')
   const [rateRps, setRateRps] = useState(500)
@@ -70,6 +69,8 @@ export default function App() {
   const [profile, setProfile] = useState<WorkloadProfile>('steady')
   const [arrivalModel, setArrivalModel] = useState<'fixed' | 'poisson'>('fixed')
   const [seed, setSeed] = useState('42')
+  const [scenario, setScenario] = useState<'' | 'url_shortener' | 'key_value' | 'async_jobs'>('')
+  const [keySpace, setKeySpace] = useState(64)
   const [notice, setNotice] = useState<string | null>(null)
   const [account, setAccount] = useState<Account | null>(null)
   const [authOpen, setAuthOpen] = useState(false)
@@ -104,22 +105,29 @@ export default function App() {
   const challengesRequested = useRef(false)
   const [challenge, setChallenge] = useState<Challenge | null>(null)
   const [lastRunGraph, setLastRunGraph] = useState<string | null>(null)
+  const [lastRunSignature, setLastRunSignature] = useState<string | null>(null)
   const [verifiedGoals, setVerifiedGoals] = useState<GoalOutcome[] | null>(null)
   const [verifying, setVerifying] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const simulation = useSimulation(page === 'dev' || page === 'practice-editor')
-  const liveSignature = JSON.stringify({ nodes: architecture.nodes.map(node => ({ id: node.id, kind: node.kind, config: node.config })), edges: architecture.edges, rateRps, durationSeconds, readPercent, profile, arrivalModel, seed })
+  const liveSignature = JSON.stringify({ nodes: architecture.nodes.map(node => ({ id: node.id, kind: node.kind, config: node.config })), edges: architecture.edges, rateRps, durationSeconds, readPercent, profile, arrivalModel, seed, scenario, keySpace })
+  const currentRunSignature = JSON.stringify({ architecture, rateRps, durationSeconds, readPercent, profile, arrivalModel, seed, scenario, keySpace })
+  const fixedRunCurrent = lastRunSignature === currentRunSignature
+  const displayStatus = simulation.live || fixedRunCurrent || simulation.status === 'loading' ? simulation.status : 'ready'
   const liveSignatureRef = useRef(liveSignature)
   const selected = architecture.nodes.find(node => node.id === selectedId)
   const problemUsage = resourceUsage(architecture)
   const addableProblemKinds = mode === 'Practice' && challenge ? challenge.allowedKinds.filter(kind => kind !== 'source' && problemUsage.nodes < challenge.resourceBudget.maxNodes && (problemUsage.counts[kind] ?? 0) < (challenge.resourceBudget.maxByKind[kind] ?? Infinity)) : undefined
-  const currentRunGoals = lastRunGraph === JSON.stringify(architecture) && simulation.status === 'completed' ? verifiedGoals || simulation.goals : null
-  const displaySnapshots = simulation.snapshots.length ? simulation.snapshots : simulation.result?.snapshots ?? []
+  const currentRunGoals = fixedRunCurrent && simulation.status === 'completed' ? verifiedGoals || simulation.goals : null
+  const displaySnapshots = simulation.live || fixedRunCurrent ? simulation.snapshots.length ? simulation.snapshots : simulation.result?.snapshots ?? [] : []
   const displayIndex = simulation.status === 'completed'
     ? Math.max(0, displaySnapshots.map(snapshot => snapshot.atUs <= (lastRunInput?.durationSeconds ?? durationSeconds) * 1_000_000).lastIndexOf(true))
     : displaySnapshots.length - 1
   const latestSnapshot = displaySnapshots[displayIndex]
   const previousSnapshot = displaySnapshots[displayIndex - 1]
+  const selectedWindowMetrics = selectedId ? latestSnapshot?.nodeMetrics[selectedId] : undefined
+  const selectedFinalMetrics = selectedId && fixedRunCurrent && simulation.status === 'completed' ? displaySnapshots.at(-1)?.nodeMetrics[selectedId] : undefined
+  const selectedMetrics = selectedWindowMetrics && selectedFinalMetrics ? { ...selectedWindowMetrics, completions: selectedFinalMetrics.completions, rejected: selectedFinalMetrics.rejected, failures: selectedFinalMetrics.failures, cacheHits: selectedFinalMetrics.cacheHits, cacheLookups: selectedFinalMetrics.cacheLookups, maxQueueDepth: selectedFinalMetrics.maxQueueDepth } : selectedWindowMetrics
 
   useEffect(() => {
     layoutToSave.current = { panelSizes, descriptionWidth, mobileHeights, collapsed, descriptionExpanded }
@@ -137,9 +145,18 @@ export default function App() {
     if (!simulation.live) { liveSignatureRef.current = liveSignature; return }
     if (liveSignature === liveSignatureRef.current) return
     liveSignatureRef.current = liveSignature
-    const timer = window.setTimeout(() => simulation.updateLive(architecture, rateRps, durationSeconds, seed, readPercent, profile, arrivalModel, mode === 'Practice' ? challenge?.workload.segments : undefined), 120)
+    const timer = window.setTimeout(() => simulation.updateLive(architecture, rateRps, durationSeconds, seed, readPercent, profile, arrivalModel, mode === 'Practice' ? challenge?.workload.segments : undefined, scenario ? { scenario, keySpace } : undefined), 120)
     return () => window.clearTimeout(timer)
   }, [liveSignature, simulation.live, simulation.updateLive])
+
+  useEffect(() => {
+    if (lastRunSignature && lastRunSignature !== currentRunSignature && !simulation.live) {
+      simulation.clear()
+      setLastRunSignature(null)
+      setLastRunGraph(null)
+      setVerifiedGoals(null)
+    }
+  }, [currentRunSignature, lastRunSignature, simulation.live, simulation.clear])
 
   const togglePanel = (panel: keyof typeof collapsed) => setCollapsed(current => ({ ...current, [panel]: !current[panel] }))
   const beginResize = (panel: keyof typeof panelSizes, event: ReactPointerEvent<HTMLDivElement>) => {
@@ -203,8 +220,8 @@ export default function App() {
   }, [architecture, mode])
 
   useEffect(() => {
-    if (mode === 'Dev') devWorkloadRef.current = { rateRps, durationSeconds, readPercent, profile, arrivalModel, seed }
-  }, [mode, rateRps, durationSeconds, readPercent, profile, arrivalModel, seed])
+    if (mode === 'Dev') devWorkloadRef.current = { rateRps, durationSeconds, readPercent, profile, arrivalModel, seed, scenario, keySpace }
+  }, [mode, rateRps, durationSeconds, readPercent, profile, arrivalModel, seed, scenario, keySpace])
 
   useEffect(() => {
     if (mode !== 'Practice' || !challenge) return
@@ -349,7 +366,7 @@ export default function App() {
   }
 
   const saveRun = async () => {
-    if (!projectId || !lastRunInput || !simulation.result || simulation.status !== 'completed') return
+    if (!projectId || !lastRunInput || !simulation.result || simulation.status !== 'completed' || !fixedRunCurrent) return
     if (lastRunGraph !== JSON.stringify(architecture) || lastRunInput.rateRps !== rateRps || lastRunInput.durationSeconds !== durationSeconds || lastRunInput.readPercent !== readPercent || lastRunInput.seed !== seed || lastRunInput.profile !== profile || lastRunInput.arrivalModel !== arrivalModel) {
       setNotice('Architecture or workload changed since this run. Run the simulation again before saving.'); return
     }
@@ -357,7 +374,7 @@ export default function App() {
     try {
       const savedVersionID = await ensureVersion()
       const segments = compileTraffic(lastRunInput.profile, lastRunInput.durationSeconds, lastRunInput.rateRps)
-      const workload = { schemaVersion: 1, seed: lastRunInput.seed, entryNodeId: architecture.nodes.find(node => node.kind === 'source')?.id, durationUs: lastRunInput.durationSeconds * 1_000_000, drainTimeoutUs: 5_000_000, arrivalRateRps: lastRunInput.rateRps, readFraction: lastRunInput.readPercent / 100, ...(segments ? { segments } : {}), ...(lastRunInput.arrivalModel === 'poisson' ? { arrivalModel: 'poisson' as const } : {}) }
+      const workload = { schemaVersion: 1, seed: lastRunInput.seed, entryNodeId: architecture.nodes.find(node => node.kind === 'source')?.id, durationUs: lastRunInput.durationSeconds * 1_000_000, drainTimeoutUs: 5_000_000, arrivalRateRps: lastRunInput.rateRps, readFraction: lastRunInput.readPercent / 100, ...(segments ? { segments } : {}), ...(lastRunInput.arrivalModel === 'poisson' ? { arrivalModel: 'poisson' as const } : {}), ...(scenario ? { scenario, keySpace } : {}) }
       const saved = await apiRequest<{id:string;result:Result;versionId:string;createdAt:string;configHash:string;engineVersion:string;provenance:string}>(`/api/projects/${projectId}/runs`, 'POST', { versionId: savedVersionID, workload })
       setRuns(items => items.some(item => item.id === saved.id) ? items : [{ id: saved.id, versionId: saved.versionId, engineVersion: saved.engineVersion, configHash: saved.configHash, provenance: saved.provenance, createdAt: saved.createdAt, workload, summary: saved.result.summary }, ...items])
       setNotice(JSON.stringify(saved.result.summary) === JSON.stringify(simulation.result.summary) ? 'Verified run saved with its immutable graph version and workload.' : 'Server run saved, but its metrics differ from the browser run. Review engine versions and inputs.')
@@ -379,7 +396,7 @@ export default function App() {
     simulation.clear()
     if (mode === 'Dev') {
       devArchitectureRef.current = architectureRef.current
-      devWorkloadRef.current = { rateRps, durationSeconds, readPercent, profile, arrivalModel, seed }
+      devWorkloadRef.current = { rateRps, durationSeconds, readPercent, profile, arrivalModel, seed, scenario, keySpace }
     }
     let graph = parseArchitecture(item.starter)
     for (const key of [practiceDraftKey(item.id, item.version), legacyPracticeDraftKey(item.id, item.version)]) {
@@ -394,7 +411,8 @@ export default function App() {
     setChallenge(item); setMode('Practice'); setProblemsOpen(false); setSelectedId(graph.nodes.find(node => node.kind !== 'source')?.id || null)
     setRateRps(item.workload.arrivalRateRps); setDurationSeconds(item.workload.durationUs / 1_000_000)
     setReadPercent((item.workload.readFraction ?? 1) * 100); setSeed(item.workload.seed); setProfile('steady'); setArrivalModel('fixed')
-    setLastRunGraph(null); setVerifiedGoals(null); setNotice(null)
+    setScenario(item.workload.scenario ?? ''); setKeySpace(item.workload.keySpace ?? 64)
+    setLastRunGraph(null); setLastRunSignature(null); setVerifiedGoals(null); setNotice(null)
     if (updateRoute) transitionTo(`/problems/${encodeURIComponent(item.id)}`)
   }
 
@@ -404,7 +422,7 @@ export default function App() {
     const graph = parseArchitecture(challenge.starter)
     architectureRef.current = graph; setArchitecture(graph); setHistory([]); setFuture([])
     setSelectedId(graph.nodes.find(node => node.kind !== 'source')?.id || null)
-    setLastRunGraph(null); setVerifiedGoals(null)
+    setLastRunGraph(null); setLastRunSignature(null); setVerifiedGoals(null)
     localStorage.removeItem(practiceDraftKey(challenge.id, challenge.version))
     localStorage.removeItem(legacyPracticeDraftKey(challenge.id, challenge.version))
   }
@@ -415,9 +433,9 @@ export default function App() {
     simulation.clear()
     commit(() => graph)
     setSelectedId(graph.nodes.find(node => node.kind === 'api')?.id ?? null)
-    setLastRunGraph(null)
+    setLastRunGraph(null); setLastRunSignature(null)
     setVerifiedGoals(null)
-    setNotice('Example design loaded. You can change it and check the goals.')
+    setNotice('Example design loaded. You can change it and evaluate the goals.')
   }
 
   const changeMode = (next: Mode, updateRoute = true) => {
@@ -426,7 +444,7 @@ export default function App() {
       architectureRef.current = devArchitectureRef.current; setArchitecture(devArchitectureRef.current)
       setSelectedId(null); setHistory([]); setFuture([]); setLastRunGraph(null)
       const saved = devWorkloadRef.current
-      setRateRps(saved.rateRps); setDurationSeconds(saved.durationSeconds); setReadPercent(saved.readPercent); setProfile(saved.profile); setArrivalModel(saved.arrivalModel); setSeed(saved.seed)
+      setRateRps(saved.rateRps); setDurationSeconds(saved.durationSeconds); setReadPercent(saved.readPercent); setProfile(saved.profile); setArrivalModel(saved.arrivalModel); setSeed(saved.seed); setScenario(saved.scenario); setKeySpace(saved.keySpace)
     }
     if (next === 'Practice') { setChallenge(null); setProblemsOpen(false) }
     setMode(next)
@@ -471,7 +489,7 @@ export default function App() {
     if (mode === 'Practice' && challenge && !challenge.allowedKinds.includes(kind)) return
     const spec = mode === 'Practice' ? challenge?.componentSpecs[kind] : undefined
     const generated = newNode(kind, architecture.nodes.length)
-    const node = { ...generated, config: spec ? { ...generated.config, processingSlots: 1, maxInFlight: 1 + spec.queueLimit, meanServiceTimeUs: spec.meanServiceTimeUs, queueLimit: spec.queueLimit, ...((kind === 'cache' || kind === 'cdn') ? { hitRate: spec.hitRate ?? 0 } : {}) } : generated.config, position: { x: Math.max(0, ...architecture.nodes.map(item => item.position.x)) + 230, y: selected?.position.y ?? 170 } }
+    const node = { ...generated, config: spec ? { ...generated.config, processingSlots: 1, maxInFlight: 1 + spec.queueLimit, meanServiceTimeUs: spec.meanServiceTimeUs, queueLimit: spec.queueLimit, ...((kind === 'cache' || kind === 'cdn') ? { hitRate: spec.hitRate ?? 0, cacheCapacity: spec.cacheCapacity ?? 0, cacheTtlUs: spec.cacheTtlUs ?? 0 } : {}) } : generated.config, position: { x: Math.max(0, ...architecture.nodes.map(item => item.position.x)) + 230, y: selected?.position.y ?? 170 } }
     if (mode === 'Practice' && challenge) {
       const error = problemGraphError(challenge, { ...architecture, nodes: [...architecture.nodes, node] })
       if (error) { setNotice(error); return }
@@ -488,13 +506,15 @@ export default function App() {
     const existing=architecture.edges.filter(edge=>edge.source===connection.source)
     if (existing.some(edge => edge.target === connection.target)) { setNotice('These components are already connected.'); return }
     const caching = sourceNode.kind === 'cache' || sourceNode.kind === 'cdn'
-    if (sourceNode.kind!=='load_balancer'&&sourceNode.kind!=='message_queue'&&!caching&&existing.length>0) {setNotice('This component already has an outgoing route.');return}
+    const conditionalService = scenario && (sourceNode.kind === 'api' || sourceNode.kind === 'worker')
+    if (sourceNode.kind!=='load_balancer'&&sourceNode.kind!=='message_queue'&&!caching&&!conditionalService&&existing.length>0) {setNotice('This component already has an outgoing route.');return}
+    if (conditionalService && existing.length >= 2) { setNotice('A service can have one read route and one write route.'); return }
     if (caching&&existing.length>=2) {setNotice('A cache or CDN can have one hit route and one miss route.');return}
     const id = `edge-${crypto.randomUUID().slice(0, 8)}`
-    const route: ArchitectureEdge['route']=caching ? existing.some(edge=>edge.route==='cache_miss') ? 'cache_hit' : 'cache_miss' : sourceNode.kind==='load_balancer'&&sourceNode.config.routingPolicy==='weighted' ? 'weighted' : 'always'
+    const route: ArchitectureEdge['route']=caching ? existing.some(edge=>edge.route==='cache_miss') ? 'cache_hit' : 'cache_miss' : sourceNode.kind==='load_balancer'&&sourceNode.config.routingPolicy==='weighted' ? 'weighted' : conditionalService && existing.length ? existing[0].route === 'read' ? 'write' : existing[0].route === 'write' ? 'read' : targetNode.kind === 'cache' || targetNode.kind === 'cdn' ? 'read' : 'write' : 'always'
     commit(current => {
       const added = { id, source: connection.source!, target: connection.target!, route, delayUs: 0, ...(route==='weighted'?{weight:1/(existing.length+1)}:{}) }
-      const edges = [...current.edges, added]
+      const edges = [...current.edges.map(edge => conditionalService && existing.length && edge.id === existing[0].id && edge.route === 'always' ? { ...edge, route: route === 'read' ? 'write' as const : 'read' as const } : edge), added]
       if (route === 'weighted') {
         const count = edges.filter(edge => edge.source === connection.source).length
         return { ...current, edges: edges.map(edge => edge.source === connection.source ? { ...edge, weight: 1 / count } : edge) }
@@ -529,7 +549,9 @@ export default function App() {
   const renameNode = (label: string) => commit(current => ({ ...current, nodes: current.nodes.map(node => node.id === selectedId ? { ...node, label } : node) }))
   const changeConfig = (field: keyof NodeConfig, value: number | string) => commit(current => {
     if (mode === 'Practice' && field !== 'processingSlots' && field !== 'maxInFlight' && field !== 'routingPolicy') return current
-    if ((field === 'processingSlots' || field === 'maxInFlight' || field === 'queueLimit') && (!Number.isInteger(Number(value)) || Number(value) < (field === 'queueLimit' ? 0 : 1))) return current
+    if ((field === 'processingSlots' || field === 'maxInFlight' || field === 'queueLimit' || field === 'cacheCapacity') && (!Number.isInteger(Number(value)) || Number(value) < (field === 'queueLimit' ? 0 : 1))) return current
+    if ((field === 'failureRate' || field === 'hitRate') && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 1)) return current
+    if (field === 'cacheTtlUs' && (!Number.isInteger(Number(value)) || Number(value) < 0 || Number(value) > 300_000_000)) return current
     if (field === 'processingSlots' && Number(value) > 1000 || field === 'queueLimit' && Number(value) > 100000) return current
     const next = {
       ...current,
@@ -562,6 +584,14 @@ export default function App() {
     return { ...current, edges: edges.map(edge => edge.source === removed.source ? { ...edge, weight: count ? 1 / count : undefined } : edge) }
   })
 
+  const changeEdgeRoute = (id: string, route: ArchitectureEdge['route']) => commit(current => {
+    const edge = current.edges.find(item => item.id === id)
+    if (!edge || !['always', 'read', 'write'].includes(route)) return current
+    const siblings = current.edges.filter(item => item.source === edge.source && item.id !== id)
+    if (siblings.length && route === 'always') { setNotice('Two service routes must be read and write.'); return current }
+    return { ...current, edges: current.edges.map(item => item.id === id ? { ...item, route } : siblings.some(sibling => sibling.id === item.id) && item.route === route ? { ...item, route: route === 'read' ? 'write' : 'read' } as ArchitectureEdge : item) }
+  })
+
   const undo = () => {
     if (!history.length) return
     const previous = history.at(-1)!
@@ -581,11 +611,12 @@ export default function App() {
   }
 
   const exportGraph = () => {
-    const blob = new Blob([JSON.stringify(architecture, null, 2)], { type: 'application/json' })
+    const bundle = { format: 'playhld-workspace-v1', architecture, workload: { rateRps, durationSeconds, readPercent, profile, arrivalModel, seed, scenario, keySpace } }
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = 'playHLD-architecture.json'
+    anchor.download = 'playHLD-workspace.json'
     anchor.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
@@ -594,10 +625,22 @@ export default function App() {
     if (!file) return
     if (file.size > 1_048_576) { setNotice('The graph file is larger than 1 MiB.'); return }
     try {
-      const graph = parseArchitecture(JSON.parse(await file.text()))
+      const parsed = JSON.parse(await file.text())
+      const graph = parseArchitecture(parsed?.architecture ?? parsed)
       commit(() => graph)
+      if (parsed?.format === 'playhld-workspace-v1' && parsed.workload && mode === 'Dev') {
+        const w = parsed.workload
+        if (Number.isInteger(w.rateRps) && w.rateRps >= 1 && w.rateRps <= 100000) setRateRps(w.rateRps)
+        if (Number.isInteger(w.durationSeconds) && w.durationSeconds >= 1 && w.durationSeconds <= 300) setDurationSeconds(w.durationSeconds)
+        if (Number.isInteger(w.readPercent) && w.readPercent >= 0 && w.readPercent <= 100) setReadPercent(w.readPercent)
+        if (w.profile === 'steady' || w.profile === 'ramp' || w.profile === 'burst') setProfile(w.profile)
+        if (w.arrivalModel === 'fixed' || w.arrivalModel === 'poisson') setArrivalModel(w.arrivalModel)
+        if (typeof w.seed === 'string' && /^\d+$/.test(w.seed)) setSeed(w.seed)
+        if (w.scenario === '' || w.scenario === 'url_shortener' || w.scenario === 'key_value' || w.scenario === 'async_jobs') setScenario(w.scenario)
+        if (Number.isInteger(w.keySpace) && w.keySpace >= 1 && w.keySpace <= 10000) setKeySpace(w.keySpace)
+      }
       setSelectedId(null)
-      setNotice('Graph imported. Run simulation to validate routes and capacity.')
+      setNotice('Workspace imported. Run simulation to validate routes and capacity.')
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not import graph.') }
     if (fileInput.current) fileInput.current.value = ''
   }
@@ -614,12 +657,12 @@ export default function App() {
       return
     }
     setNotice(null)
-    setFlowPlaying(true)
-    setVerifiedGoals(null); setLastRunGraph(JSON.stringify(architecture))
+    setVerifiedGoals(null); setLastRunGraph(JSON.stringify(architecture)); setLastRunSignature(currentRunSignature)
     setLastRunInput({ rateRps: effectiveRate, durationSeconds: effectiveDuration, readPercent: effectiveRead, seed: effectiveSeed, profile, arrivalModel })
     const segments = mode === 'Practice' ? challenge?.workload.segments : compileTraffic(profile, effectiveDuration, effectiveRate)
-    if (fixed) simulation.run(architecture, effectiveRate, effectiveDuration, effectiveSeed, effectiveRead, mode === 'Practice' ? challenge?.goals : undefined, mode === 'Practice' ? challenge?.workload.drainTimeoutUs : undefined, segments, mode === 'Practice' ? 'fixed' : arrivalModel)
-    else simulation.startLive(architecture, effectiveRate, effectiveDuration, effectiveSeed, effectiveRead, profile, mode === 'Practice' ? 'fixed' : arrivalModel, mode === 'Practice' ? challenge?.workload.segments : undefined)
+    const functional = scenario ? { scenario, keySpace, hotKeyFraction: mode === 'Practice' ? challenge?.workload.hotKeyFraction ?? 0.8 : 0.8 } : undefined
+    if (fixed) simulation.run(architecture, effectiveRate, effectiveDuration, effectiveSeed, effectiveRead, mode === 'Practice' ? challenge?.goals : undefined, mode === 'Practice' ? challenge?.workload.drainTimeoutUs : undefined, segments, mode === 'Practice' ? 'fixed' : arrivalModel, functional)
+    else simulation.startLive(architecture, effectiveRate, effectiveDuration, effectiveSeed, effectiveRead, profile, mode === 'Practice' ? 'fixed' : arrivalModel, mode === 'Practice' ? challenge?.workload.segments : undefined, functional)
   }
 
   const editorPage = page === 'dev' || page === 'practice-editor' && challenge?.id === routeProblemId
@@ -642,7 +685,7 @@ export default function App() {
         {editorPage && <div className="header-run-controls" aria-label="Simulation controls">
           <button type="button" className="run-icon-button" aria-label={simulation.status === 'running' ? 'Pause simulation' : simulation.status === 'paused' ? 'Resume simulation' : 'Run simulation'} title={simulation.status === 'running' ? 'Pause simulation' : simulation.status === 'paused' ? 'Resume simulation' : 'Run simulation'} onClick={() => simulation.status === 'running' ? simulation.pause() : simulation.status === 'paused' ? simulation.resume() : run()} disabled={simulation.status === 'loading'}>{simulation.status === 'running' ? <Pause size={17} /> : <Play size={17} fill="currentColor" />}</button>
           {(simulation.status === 'running' || simulation.status === 'paused') && <button type="button" className="run-icon-button" aria-label="Stop simulation" title="Stop simulation" onClick={simulation.cancel}><Square size={15} fill="currentColor" /></button>}
-          {practiceEditor ? <button type="button" className="submit-run-button" onClick={() => run(true)} disabled={!simulation.live && simulation.status === 'running'}><Play size={14} />Check goals</button> : <button type="button" className="submit-run-button" onClick={() => run(true)} disabled={!simulation.live && simulation.status === 'running'}>Capture run</button>}
+          <button type="button" className="submit-run-button" onClick={() => run(true)} disabled={!simulation.live && simulation.status === 'running'}>Evaluate</button>
         </div>}
         <div className="header-spacer" />
         {editorPage && <button type="button" className="header-save" onClick={() => void saveDraft()} title="Save draft"><Save size={15} /><span>Save</span></button>}
@@ -682,11 +725,11 @@ export default function App() {
             <button type="button" className="toolbar-button" title="Import JSON" aria-label="Import JSON" onClick={() => fileInput.current?.click()}><ArrowUpFromLine size={17} /></button>
             <button type="button" className="toolbar-button" title="Export JSON" aria-label="Export JSON" onClick={exportGraph}><ArrowDownToLine size={17} /></button>
           </div>
-          {collapsed.editor ? <div className="canvas-collapsed">Architecture canvas collapsed</div> : <Suspense fallback={<div className="canvas-wrap" />}><EditorCanvas architecture={architecture} selectedId={selectedId} onSelect={setSelectedId} onMove={moveNode} onMoveStart={() => { dragStartRef.current = architectureRef.current }} onMoveStop={moveStop} onConnect={connect} onDeleteNode={removeNode} onDeleteEdge={removeEdge} snapshot={latestSnapshot} previousSnapshot={previousSnapshot} flowActive={flowPlaying && (simulation.status === 'running' || simulation.status === 'paused' || simulation.status === 'completed')} flowPaused={simulation.status === 'paused'} /></Suspense>}
+          {collapsed.editor ? <div className="canvas-collapsed">Architecture canvas collapsed</div> : <Suspense fallback={<div className="canvas-wrap" />}><EditorCanvas architecture={architecture} selectedId={selectedId} onSelect={setSelectedId} onMove={moveNode} onMoveStart={() => { dragStartRef.current = architectureRef.current }} onMoveStop={moveStop} onConnect={connect} onDeleteNode={removeNode} onDeleteEdge={removeEdge} onChangeEdgeRoute={changeEdgeRoute} functionalRouting={!!scenario} snapshot={latestSnapshot} previousSnapshot={previousSnapshot} flowActive={simulation.live && (simulation.status === 'running' || simulation.status === 'paused')} flowPaused={simulation.status === 'paused'} /></Suspense>}
           {!collapsed.editor && <div role="separator" aria-label="Resize architecture canvas" aria-orientation="horizontal" className="mobile-resizer" onPointerDown={event => beginMobileResize('editor', event)} />}
         </section>
-        <Inspector node={selected} metrics={selectedId ? latestSnapshot?.nodeMetrics[selectedId] : undefined} collapsed={collapsed.inspector} onToggle={() => togglePanel('inspector')} onResizeStart={event => beginMobileResize('inspector', event)} continuousMode={mode !== 'Practice'} fixedPerformance={mode === 'Practice'} deletionLocked={selected?.kind === 'source' || mode === 'Practice' && selected?.kind === 'api' && problemUsage.counts.api === 1} maxProcessingSlotsPerNode={mode === 'Practice' ? challenge?.resourceBudget.maxProcessingSlotsPerNode : undefined} onRename={renameNode} onConfig={changeConfig} onDelete={() => selectedId && removeNode(selectedId)} rateRps={rateRps} durationSeconds={durationSeconds} readPercent={readPercent} seed={seed} profile={profile} onProfile={setProfile} arrivalModel={arrivalModel} onArrivalModel={setArrivalModel} workloadLocked={mode === 'Practice'} onWorkload={values => { if (values.rateRps !== undefined) setRateRps(values.rateRps); if (values.durationSeconds !== undefined) setDurationSeconds(values.durationSeconds); if (values.readPercent !== undefined) setReadPercent(values.readPercent); if (values.seed !== undefined) setSeed(values.seed) }} />
-        <MetricsPanel status={simulation.status} live={simulation.live || simulation.status === 'stopped'} warning={simulation.warning} liveP95LatencyUs={simulation.liveP95LatencyUs} liveP99LatencyUs={simulation.liveP99LatencyUs} snapshots={simulation.snapshots} result={simulation.result} error={simulation.error} durationSeconds={durationSeconds} onPause={simulation.pause} onResume={simulation.resume} onCancel={simulation.cancel} onSaveRun={mode === 'Dev' && projectId ? () => void saveRun() : undefined} savingRun={runBusy} collapsed={collapsed.metrics} onToggle={() => togglePanel('metrics')} flowPlaying={flowPlaying} onFlowPlaying={setFlowPlaying} onResizeStart={event => beginMobileResize('metrics', event)} />
+        <Inspector node={selected} metrics={selectedMetrics} collapsed={collapsed.inspector} onToggle={() => togglePanel('inspector')} onResizeStart={event => beginMobileResize('inspector', event)} continuousMode={mode !== 'Practice'} fixedPerformance={mode === 'Practice'} deletionLocked={selected?.kind === 'source' || mode === 'Practice' && selected?.kind === 'api' && problemUsage.counts.api === 1} maxProcessingSlotsPerNode={mode === 'Practice' ? challenge?.resourceBudget.maxProcessingSlotsPerNode : undefined} onRename={renameNode} onConfig={changeConfig} onDelete={() => selectedId && removeNode(selectedId)} rateRps={rateRps} durationSeconds={durationSeconds} readPercent={readPercent} seed={seed} profile={profile} onProfile={setProfile} arrivalModel={arrivalModel} onArrivalModel={setArrivalModel} scenario={scenario} onScenario={setScenario} keySpace={keySpace} onKeySpace={setKeySpace} workloadLocked={mode === 'Practice'} onWorkload={values => { if (values.rateRps !== undefined) setRateRps(values.rateRps); if (values.durationSeconds !== undefined) setDurationSeconds(values.durationSeconds); if (values.readPercent !== undefined) setReadPercent(values.readPercent); if (values.seed !== undefined) setSeed(values.seed) }} />
+        <MetricsPanel status={displayStatus} live={simulation.live || displayStatus === 'stopped'} warning={simulation.warning} liveP95LatencyUs={simulation.liveP95LatencyUs} liveP99LatencyUs={simulation.liveP99LatencyUs} snapshots={displaySnapshots} result={fixedRunCurrent ? simulation.result : null} error={simulation.error} durationSeconds={durationSeconds} onPause={simulation.pause} onResume={simulation.resume} onCancel={simulation.cancel} onSaveRun={mode === 'Dev' && projectId ? () => void saveRun() : undefined} savingRun={runBusy} collapsed={collapsed.metrics} onToggle={() => togglePanel('metrics')} onResizeStart={event => beginMobileResize('metrics', event)} />
         {!collapsed.rail && <div role="separator" aria-label="Resize components" aria-orientation="vertical" className="panel-resizer rail-resizer" onPointerDown={event => beginResize('rail', event)} />}
         {!collapsed.inspector && <div role="separator" aria-label="Resize inspector" aria-orientation="vertical" className="panel-resizer inspector-resizer" onPointerDown={event => beginResize('inspector', event)} />}
         {!collapsed.metrics && <div role="separator" aria-label="Resize simulation metrics" aria-orientation="horizontal" className="panel-resizer metrics-resizer" onPointerDown={event => beginResize('metrics', event)} />}

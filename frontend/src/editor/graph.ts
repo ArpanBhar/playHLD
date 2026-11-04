@@ -137,7 +137,7 @@ export function parseArchitecture(value: unknown): Architecture {
   })
   const edgeIds = new Set<string>()
   const edges = graph.edges.map(edge => {
-    if (!edge || typeof edge.id !== 'string' || edgeIds.has(edge.id) || !ids.has(edge.source) || !ids.has(edge.target) || !['always', 'cache_hit', 'cache_miss', 'weighted'].includes(edge.route)) throw new Error('Connection is invalid or has a missing endpoint.')
+    if (!edge || typeof edge.id !== 'string' || edgeIds.has(edge.id) || !ids.has(edge.source) || !ids.has(edge.target) || !['always', 'cache_hit', 'cache_miss', 'weighted', 'read', 'write'].includes(edge.route)) throw new Error('Connection is invalid or has a missing endpoint.')
     edgeIds.add(edge.id)
     return edge
   })

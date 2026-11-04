@@ -10,11 +10,13 @@ type WasmScope = DedicatedWorkerGlobalScope & {
   playHLDStep?: (handle: string, batchSize: number) => string
   playHLDStepUntilSnapshot?: (handle: string, batchSize: number) => string
   playHLDUpdateArchitecture?: (handle: string, architecture: string) => string
+  playHLDExportState?: (handle: string) => string
+  playHLDImportState?: (handle: string, state: string) => string
   playHLDReset?: (handle: string) => string
   playHLDDispose?: (handle: string) => string
   playHLDEvaluateGoals?: (result: string, workload: string, goals: string) => string
 }
-type Reply = { ok: boolean; handle?: string; outcome?: { snapshots: Snapshot[]; processedEvents: number; done: boolean; result?: Result }; goals?: GoalOutcome[]; error?: string }
+type Reply = { ok: boolean; handle?: string; outcome?: { snapshots: Snapshot[]; processedEvents: number; done: boolean; result?: Result }; goals?: GoalOutcome[]; state?: string; error?: string }
 
 const scope = self as unknown as WasmScope
 let initialized = false
@@ -94,11 +96,21 @@ function queueLiveFrame(snapshot: Snapshot, after: () => void) {
 
 function restartLive(expectedRunId: number, expectedGeneration: number) {
   if (!running || expectedRunId !== runId || expectedGeneration !== generation || !liveConfig) return
-  if (handle) decode(scope.playHLDDispose!(handle))
-  handle = createHandle(liveConfig)
-  liveOffsetUs = liveCurrentUs
-  if (liveLastSnapshot) liveBase = { offered: liveLastSnapshot.offered, succeeded: liveLastSnapshot.succeeded, failed: liveLastSnapshot.failed }
-  setTimeout(() => pumpLive(expectedRunId, expectedGeneration), 0)
+  try {
+    const previous = handle
+    const state = previous && scope.playHLDExportState ? decode(scope.playHLDExportState(previous)).state : undefined
+    const replacement = createHandle(liveConfig)
+    try { if (state && scope.playHLDImportState) decode(scope.playHLDImportState(replacement, state)) }
+    catch (error) { decode(scope.playHLDDispose!(replacement)); throw error }
+    if (previous) decode(scope.playHLDDispose!(previous))
+    handle = replacement
+    liveOffsetUs = liveCurrentUs
+    if (liveLastSnapshot) liveBase = { offered: liveLastSnapshot.offered, succeeded: liveLastSnapshot.succeeded, failed: liveLastSnapshot.failed }
+    setTimeout(() => pumpLive(expectedRunId, expectedGeneration), 0)
+  } catch (error) {
+    running = false
+    scope.postMessage({ type: 'ERROR', runId, message: error instanceof Error ? error.message : String(error) })
+  }
 }
 
 function pumpLive(expectedRunId: number, expectedGeneration: number) {
@@ -185,9 +197,17 @@ scope.onmessage = async event => {
         scope.postMessage({ type: 'CONFIG_APPLIED', runId })
         return
       }
-      let replacement: string
-      try { replacement = createHandle(message.config) }
-      catch (error) { scope.postMessage({ type: 'CONFIG_ERROR', runId, message: error instanceof Error ? error.message : String(error) }); return }
+      let replacement: string | null = null
+      try {
+        replacement = createHandle(message.config)
+        const previousWorkload = current.workload as { scenario?: string; keySpace?: number }
+        const nextWorkload = next.workload as { scenario?: string; keySpace?: number }
+        if (previousWorkload.scenario && previousWorkload.scenario === nextWorkload.scenario && (previousWorkload.keySpace ?? 64) === (nextWorkload.keySpace ?? 64) && scope.playHLDExportState && scope.playHLDImportState) {
+          const state = decode(scope.playHLDExportState(handle)).state
+          if (state) decode(scope.playHLDImportState(replacement, state))
+        }
+      }
+      catch (error) { if (replacement) decode(scope.playHLDDispose!(replacement)); scope.postMessage({ type: 'CONFIG_ERROR', runId, message: error instanceof Error ? error.message : String(error) }); return }
       if (liveTimer !== null) clearTimeout(liveTimer)
       liveTimer = null
       pendingLive = null

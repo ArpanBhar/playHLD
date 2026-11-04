@@ -4,7 +4,7 @@ import { Trash2 } from 'lucide-react'
 import ArchitectureNode from './ArchitectureNode'
 import RequestEdge from './RequestEdge'
 import { toFlowEdges, toFlowNodes, type EditorNode } from './graph'
-import type { Architecture, Snapshot } from '../simulation/types'
+import type { Architecture, ArchitectureEdge, Snapshot } from '../simulation/types'
 
 const nodeTypes = { architecture: ArchitectureNode }
 const edgeTypes = { request: RequestEdge }
@@ -19,6 +19,8 @@ interface Props {
   onConnect: (connection: Connection) => void
   onDeleteNode: (id: string) => void
   onDeleteEdge: (id: string) => void
+  onChangeEdgeRoute: (id: string, route: ArchitectureEdge['route']) => void
+  functionalRouting: boolean
   snapshot?: Snapshot
   previousSnapshot?: Snapshot
   flowActive: boolean
@@ -29,7 +31,7 @@ export default function EditorCanvas(props: Props) {
   return <ReactFlowProvider><Canvas {...props} /></ReactFlowProvider>
 }
 
-function Canvas({ architecture, selectedId, onSelect, onMove, onMoveStart, onMoveStop, onConnect, onDeleteNode, onDeleteEdge, snapshot, previousSnapshot, flowActive, flowPaused }: Props) {
+function Canvas({ architecture, selectedId, onSelect, onMove, onMoveStart, onMoveStop, onConnect, onDeleteNode, onDeleteEdge, onChangeEdgeRoute, functionalRouting, snapshot, previousSnapshot, flowActive, flowPaused }: Props) {
   const { fitView } = useReactFlow()
   const canvasRef = useRef<HTMLDivElement>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
@@ -98,6 +100,7 @@ function Canvas({ architecture, selectedId, onSelect, onMove, onMoveStart, onMov
     </ReactFlow>
     {selectedEdge && <div className="selected-edge-tools" role="group" aria-label="Selected connection">
       <span>{architecture.nodes.find(node => node.id === selectedEdge.source)?.label ?? selectedEdge.source} → {architecture.nodes.find(node => node.id === selectedEdge.target)?.label ?? selectedEdge.target}</span>
+      {functionalRouting && ['api', 'worker'].includes(architecture.nodes.find(node => node.id === selectedEdge.source)?.kind ?? '') && <label>When <select aria-label="Connection operation" value={selectedEdge.route} onChange={event => onChangeEdgeRoute(selectedEdge.id, event.target.value as ArchitectureEdge['route'])}><option value="always">Any request</option><option value="read">Read / redirect</option><option value="write">Write / create</option></select></label>}
       <button type="button" onClick={() => { onDeleteEdge(selectedEdge.id); setSelectedEdgeId(null) }}><Trash2 size={14} />Delete connection</button>
     </div>}
   </div>

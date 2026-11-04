@@ -12,7 +12,7 @@ interface SharedProps {
 export function ProblemsCatalog({ challenges, onSelect }: Pick<SharedProps, 'challenges' | 'onSelect'>) {
   return <main className="problems-catalog" aria-label="Problems">
     <div className="problems-catalog-inner">
-      <div className="problems-intro"><h1>Problems</h1><p>Build a system from the client and API server. Add and connect components, then meet every performance target within the resource budget.</p></div>
+      <div className="problems-intro"><h1>Problems</h1><p>Build a system from the client and API server. Connect real component instances, then meet each problem's correctness and performance targets within its resource budget.</p></div>
       <div className="problems-list">
         {challenges.map((problem, index) => <button className="problem-card" type="button" key={problem.id} onClick={() => onSelect(problem)}>
           <span className="problem-card-index">{String(index + 1).padStart(2, '0')}</span>
@@ -34,17 +34,17 @@ export function ProblemDescription({ selected, graph, goals, onReset, onLoadSolu
       <div className="description-topline"><span>{selected.difficulty}</span><span>{selected.workload.arrivalRateRps.toLocaleString()} req/s</span></div>
       <h1>{selected.title}</h1><p className="description-scenario">{selected.scenario}</p>
       <h2>Targets</h2><div className="description-goals">{selected.goals.map(goal => { const outcome = goals?.find(item => item.id === goal.id); return <div className={`description-goal ${outcome?.status ?? ''}`} key={goal.id}><span>{outcome?.status === 'met' ? <Check size={14} /> : outcome?.status === 'unmet' ? <X size={14} /> : '○'}</span><div>{goal.label}{outcome?.observed != null && <small>Measured {Number(outcome.observed.toFixed(1))} {outcome.unit}</small>}</div></div> })}</div>
-      <h2>Starting point</h2><p>The canvas contains a client and an API server. Connect them directly or add components. Any valid design that meets every target within the budget can pass.</p>
+      <h2>Starting point</h2><p>The canvas contains a client and an API server. Connect them directly or add components. Any valid design that meets every target within the budget can pass. {selected.workload.scenario ? 'This problem sends typed read and write requests through stateful stores.' : 'This problem evaluates processing capacity and latency.'}</p>
       <details className="description-hints"><summary>Hints</summary><ol>{selected.hints.map(hint => <li key={hint}>{hint}</li>)}</ol></details>
     </> : tab === 'resources' ? <>
-      <h1>Resource limits</h1><p>Each box is one component instance. Add another box to scale out, then connect a load balancer to split traffic. Component speed, queue size, and cache hit rate are fixed for this problem.</p>
+      <h1>Resource limits</h1><p>Each box is one component instance. Add another box to scale out, then connect a load balancer to split traffic. Component speed and queue size are fixed. {selected.workload.scenario ? 'Cache capacity is fixed; hit rate comes from actual requests.' : 'Cache hit rate is fixed for this capacity problem.'}</p>
       <div className="description-budget"><span>Component instances <b>{usage.nodes} / {budget.maxNodes}</b></span><span>Processing slots <b>{usage.slots} / {budget.maxSlots}</b></span><span>Slots per component <b>≤ {budget.maxProcessingSlotsPerNode}</b></span></div>
       <h2>Component allowances</h2><div className="description-kind-limits">{Object.entries(budget.maxByKind).map(([kind, limit]) => <span key={kind}>{kind.replace('_', ' ')} <b>{usage.counts[kind as keyof typeof usage.counts] ?? 0} / {limit}</b></span>)}</div>
     </> : <>
       <h1>One working design</h1><p>{selected.solution.explanation}</p>
       <p className="solution-note">This example meets the published goals. Your own design can use a different route.</p>
       <h2>Components</h2><div className="solution-components">{selected.solution.architecture.nodes.map(node => <div key={node.id}><strong>{node.label}</strong><span>{node.kind.replace('_', ' ')}{node.kind === 'source' ? '' : ` · ${node.config.processingSlots ?? 1} processing slots`}</span></div>)}</div>
-      <h2>Connections</h2><div className="solution-connections">{selected.solution.architecture.edges.map(edge => <div key={edge.id}>{selected.solution.architecture.nodes.find(node => node.id === edge.source)?.label} <span>→</span> {selected.solution.architecture.nodes.find(node => node.id === edge.target)?.label}{edge.route === 'cache_miss' && <small>miss</small>}</div>)}</div>
+      <h2>Connections</h2><div className="solution-connections">{selected.solution.architecture.edges.map(edge => <div key={edge.id}>{selected.solution.architecture.nodes.find(node => node.id === edge.source)?.label} <span>→</span> {selected.solution.architecture.nodes.find(node => node.id === edge.target)?.label}{edge.route !== 'always' && <small>{edge.route.replace('_', ' ')}</small>}</div>)}</div>
     </>}</div>
     <div className="description-footer">{tab === 'solution' ? <button type="button" className="solution-footer-action" onClick={onLoadSolution}>Load example <ArrowRight size={13} /></button> : <span>Draft saved locally</span>}<button type="button" onClick={onReset}><RotateCcw size={13} /> Reset design</button></div>
     <div role="separator" aria-label="Resize problem description vertically" aria-orientation="horizontal" className="mobile-resizer" onPointerDown={onResizeStart} />
